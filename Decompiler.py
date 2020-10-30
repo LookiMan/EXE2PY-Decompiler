@@ -1,459 +1,351 @@
 ﻿# -*- coding: UTF-8 -*-
-from os.path     import exists, join, basename, dirname, isdir, isfile, splitext, split
-from os          import system, listdir, mkdir, rename
-from progressbar import ProgresBar
-from uuid        import uuid4
+'''
+Установка дополнительных библиотек:
+pip install unpy2exe
+pip install uncompyle6
+
+Принцип работы скрипта:
+В поле для ввода указываете путь к файлу .exe (скомпилированным с помощью pyinstaller или py2exe) или к байт-коду (.pyc) 
+С помощью pyinstxtractor извлекается содержимое файла
+После чего с помощью библиотеки uncompyle6 извлеченные файлы c расширением .pyc компилируются в код
+
+Особенности работы скрипта:
+Можно дэкомпилировать байт-код версий python 3.4, 3.6, 3.7 скомпилированы
+'''
+
+from tkinter import (Tk, StringVar, IntVar, Label, Button, Checkbutton)
+from tkinter.filedialog import askopenfilename
+from tkinter.messagebox import (showinfo, showwarning, showerror)
+
+import threading
+import platform
+import os
 import sys
-import io
-import re
-import shutil
-import struct
-import imp
 import time
-
-print('[>] Starting...')
-
-errors = []
-
-root = dirname(sys.argv[0])
+import glob
+import shutil
 
 try:
-	from colorama import Fore, init
-except ImportError:
-	errors.append("Не найден модуль 'colorama'! \nУстановите модуль коммандой pip install colorama ")
-except Exception as e:
-	errors.append(e)
+	import keyboard
+except Exception as exc:
+	showerror(exc.msg)
 
 try:
 	from uncompyle6.bin import uncompile
-except ImportError:
-	errors.append("Не найден модуль 'uncompyle6'! \nУстановите модуль коммандой pip install uncompyle6 ")
-except Exception as e:
-	errors.append(e)
+except Exception as exc:
+	showerror(exc.msg)
 
 try:
 	import unpy2exe
-except ImportError:
-	errors.append("Не найден модуль 'unpy2exe'! \nУстановите модуль коммандой pip install unpy2exe")
-except Exception as e:
-	errors.append(e)
+except Exception as exc:
+	showerror(exc.msg)
 
 try:
-	import extractor
-except ImportError:
-	errors.append("Не найден модуль 'extractor'!")
-except Exception as e:
-	errors.append(e)
+	import pyinstxtractor
+except Exception as exc:
+	showerror(exc.msg)
 
-if len(errors) > 0:
-	for e in errors:
-		print(e)
-	exit(1)
+from popup_menu import EntryContextMenuWrapper
 
-else:
-	print(Fore.GREEN + '[>] Decompiler 1.0: Started successfully!')
 
-init(autoreset=True)
 
-# Если этот параметр True программа автоматически декомпилирует все .pyc родключаймие библиотеки 
-auto_lib_decompiling = None
-lock_open_directory = False
+bg = '#0FA75F'
+font_style = 'Verdana 11'
+version = int('%i%i' % (sys.version_info[0], sys.version_info[1])) # формат версии 34, 36, 37, 38
 
-def reset():
-	global auto_lib_decompiling, lock_open_directory
-	global current_directory, extract_directory, cache_directory, scripts_directory, main_files
+root = Tk()
+root.geometry('675x95')
+root.title('Decompiller 2.0')
+root.configure(bg=bg)
+root.resizable(width=False, height=False)
 
-	current_directory = extract_directory = cache_directory = scripts_directory = main_files = ''
-	auto_lib_decompiling = None
-	lock_open_directory = False
+file_variable = StringVar()
+is_decompile_sublibraries = IntVar()
 
-class Text_buffer(object):
-	def __init__(self, output_stream):
-		global sys
-		self.buffer = []
-		self.output = output_stream
-		sys.stdout = self
+# 
+def Thread(my_funk):
+	def wrapper(*args, **kwargs):
+		my_thread = threading.Thread(target=my_funk, daemon=True, args=args, kwargs=kwargs)
+		my_thread.start()
+	return wrapper
+
+# Класс имитирующий sys.stdout для для перехвата данных 
+class Buffer:
+	def __init__(self):
+		self._stream = None
+		self._data = []
+
+
+	def set_stream(self, stream):
+		self._stream = stream
+
+
+	def get_stream(self):
+		return self._stream
+
 
 	def write(self, text):
-		self.buffer.append('\n' + str(text))
+		self._data.append(text)
+
 
 	def flush(self):
 		pass
 
-	def close(self, flag_print=False):
-		global sys
-		if flag_print == True:
-			for value in self.buffer:
-				self.output.write(value)
-		sys.stdout = self.output
+
+	def is_has_string(self, string):
+		for line in self._data:
+			if(string in line):
+				return True
+
+# Класс для коррекции заголовка .pyc файла 
+class File_corrector:
+	def __init__(self, headers):
+		self._headers = [header for header in headers.values()]
+		self._filename = None
+		self._iter = 0
+
+
+	def set_file(self, filename):
+		self._filename = filename
+		self._file_handler = open(self._filename, mode='rb')
+		self._bytes = self._file_handler.read()
+		self._file_handler.close()
+		self._iter = 0
+
+
+	def is_need_correct(self):
+		with open(self._filename, mode='rb') as file:
+			byte = file.read(1)
+			if(byte == b'\xe3'):
+				return True
+			return False		
+
+
+	def correct_file(self):
+		with open(self._filename, mode='wb') as file:
+			file.write(self._headers[self._iter])
+			file.write(self._bytes)
+		self._iter += 1
+
+
+	def write_header(self, header):
+		with open(self._filename, mode='wb') as file:
+			file.write(header)
+			file.write(self._bytes)
+
+# Выполняет роль заглушки
+def _generate_pyc_header(python_version, size):
+	return b''
+
+# Добавление гарячих клавиш полю для ввода
+def add_hot_keys(element):
+	keyboard.add_hotkey('ctrl+c', element.copy_selection)
+	keyboard.add_hotkey('ctrl+x', element.cut_selection)
+	keyboard.add_hotkey('ctrl+a', element.select_all)
+	keyboard.add_hotkey('ctrl+v', element.paste_from_clipboard)
+	keyboard.add_hotkey('ctrl+d', element.clearn)
+
+# Диалог выбора файла
+def select_file(variable: object):
+	root.wm_attributes('-topmost', 1)
+	if(platform.system() == "Darwin"):
+		file_path = askopenfilename(parent=root)
+	else:
+		file_path = askopenfilename(parent=root, filetypes=[('All files', '*')])
+
+	file_path = file_path.replace('/', '\\')
+	
+	if(file_path != ''):
+		variable.set(file_path)
 
 # Открывает папку с дэкомпилированым проектом
-def open_directory(path):
+def open_output_folder(folder: str):
+	if platform.system() == 'Windows':
+		os.system('start "" "%s"' % folder)
+	elif platform.system() == 'Linux':
+		os.system('xdg-open "%s"' % folder)
+	elif platform.system() == 'Darwin':
+		os.system('open "%s"' % folder)
+
+#
+def remove_folder(folder: str):
 	try:
-		system('start %s' %  path)
-		print(Fore.YELLOW + '[>] Opening folder...')
-	except FileNotFoundError:
-		print(Fore.RED + 'Could not find folder!')
+		shutil.rmtree(folder)
+	except:
+		print('[!] Error removing folder: %s' % folder)
 
 # Создает папку для сохранения скриптов
-def create_directory(*paths):
-	# Проверка существует ли папка таким именем
-	if exists(paths[0]):
-		try:
-			shutil.rmtree(paths[0])
-		except:
-			print(Fore.RED + '[!] Error removing folder: %s' % paths[0])
-	for path in paths:
-		if not exists(path[0]):
-			try:
-				mkdir(path)
-			except:
-				print(Fore.RED + '[!] Error creating folder: %s' % path)
-
-# Корекция магического числа в бинарном файле
-def magic_corection(files, scripts_directory):
-	print(Fore.YELLOW + '\n[>] starting magic corection')
-	temp_data = b''
-	errors = []
-
-	def __timestamp():
-	    """Generate timestamp data for pyc header."""
-	    today = time.time()
-	    ret = struct.pack(b'=L', int(today))
-	    return ret
-
-	def __source_size(size):
-	    """Generate source code size data for pyc header."""
-	    ret = struct.pack(b'=L', int(size))
-	    return ret
-
-	def __current_magic():
-	    """Current Python magic number."""
-	    return imp.get_magic()
-
-	def __build_magic(magic):
-		"""Build Python magic number for pyc header."""
-		return struct.pack(b'Hcc', magic, b'\r', b'\n')
-
-	def __generate_pyc_header(python_version, size):
-	    if python_version is None:
-	        version = __current_magic()
-	        version_tuple = sys.version_info
-	    else:
-	        version = PYTHON_MAGIC_WORDS.get(python_version[:3], __current_magic())
-	        version_tuple = tuple(map(int, python_version.split('.')))
-
-	    header = version + __timestamp()
-	    if version_tuple[0] == 3 and version_tuple[1] >= 3:
-	        # source code size was added to pyc header since Python 3.3
-	        header += __source_size(size)
-	    return header
-
-	magic = {
-	    # version magic numbers (see Python/Lib/importlib/_bootstrap_external.py)
-	    '1.5': __build_magic(20121),
-	    '1.6': __build_magic(50428),
-	    '2.0': __build_magic(50823),
-	    '2.1': __build_magic(60202),
-	    '2.2': __build_magic(60717),
-	    '2.3': __build_magic(62011),
-	    '2.4': __build_magic(62061),
-	    '2.5': __build_magic(62131),
-	    '2.6': __build_magic(62161),
-	    '2.7': __build_magic(62191),
-	    '3.0': __build_magic(3000),
-	    '3.1': __build_magic(3141),
-	    '3.2': __build_magic(3160),
-	    '3.3': __build_magic(3190),
-	    '3.4': __build_magic(3250),
-	    '3.5': __build_magic(3350),
-	    '3.6': __build_magic(3360),
-	    '3.7': __build_magic(3390),
-	}
-
-	for file in files:
-		if not file.endswith('.pyc'):
-			file += '.pyc'
-		try:
-			with open(join(scripts_directory, file), mode='rb') as f:
-				temp_data = f.read()	
-		except Exception as e:
-			errors.append('[%s] - %s' % ( join(scripts_directory, file), e) )
-
-		pyc_header = __generate_pyc_header(None, len(temp_data))
-
-		try:
-			with open(join(scripts_directory, file), mode='wb') as f:
-				f.write(pyc_header)
-				f.write(temp_data)
-		except Exception as e:
-			errors.append('[%s] - %s' % ( join(scripts_directory, file), e) )
-
-	if len(errors) > 0:
-		for e in errors:
-			print(Fore.RED + e)
-	else:
-		print(Fore.GREEN + '[!] magic corection completed successfully!')
-	return 1
+def create_folder(folder: str):
+	try:
+		os.mkdir(folder)
+	except:
+		print('[!] Error creating folder: %s' % folder)
 
 # Расшифровка .pyc в скрипт .py
-def pyc_decode(file_list, files_directory, output_directory=None):
-	print(Fore.YELLOW + '[>] starting cache decoding')
-	errors = []
-	console = None
-
-	if output_directory == None:
-		output_directory = files_directory
-
-	# Инициализируем прогрессбар
-	progress  = ProgresBar(len(file_list), 40)
-
-	# Запуск декомпиляции .pyc файлов .py
-	for n, file in enumerate(file_list):
-
-		if not file.endswith('.pyc'):
-			file += '.pyc'
-
-		sys.argv = ['uncompyle6', '-o', output_directory, join(files_directory, file)]
-
-		try:
-			Text_buffer(sys.stdout)
-			uncompile.main_bin()	
-
-		except Exception as e:
-			Text_buffer(sys.stderr)
-			errors.append('[%s] - %s' % ( file, e) )
-			sys.stderr.close()
-			raise Exception
-
-		finally:
-			sys.stdout.close()
-			progress.call()
-
-	if len(errors) > 0:
-		for e in errors:
-			print(Fore.RED + e)
-	else:
-		print(Fore.GREEN + '[>] decoding completed successfully!')
-
-# Декомпиляция модулей с .pyc в .py
-def cache_decompiler(modules_list, files_directory, output_directory=None, opendir=True):
-	if modules_list is None:
-		modules_list = listdir(files_directory)
-	try:
-		# Запуск декомпиляции главных скриптов
-		pyc_decode(modules_list, files_directory, output_directory)
-	except:
-		# Коректировка числа 'magic'
-		if magic_corection(modules_list, files_directory):
-			# Запуск декомпиляции главных скриптов
-			try:
-				pyc_decode(modules_list, files_directory, output_directory)	
-			except:
-				print(Fore.RED + '\n[!] The script is running in a different python version than the one used to build the executable!')
-				open_directory(output_directory)
-		else:
-			print(Fore.RED + '[!] An error occurred while modifying files!')
-
-	if opendir is True and lock_open_directory is False:
-		# Открытие папки из декомпилироваными скриптами
-		open_directory(output_directory)
-
-# Основная функция программы
-# Сначала выполняется функция unpack потом decode
-# flag определяет режим декомпиляции .ехе или .рус файлов
-def main(flag):
-	global current_directory, extract_directory, cache_directory, scripts_directory, main_files
-
-	# Получение имени папки проекта
-	file_name = re.findall(r'\\\w+\.[\.\w\d-]*$', sys.argv[1] )
-	project_folder =  'Decompiled_' + file_name[0].split('.', 1)[0].replace('\\', '') +'_'+ str(uuid4())[:5]
-	print(Fore.YELLOW + '[>] Project folder name: %s' % project_folder)
-
-	# Получение текущей директории
-	current_directory = join(root, project_folder)
+def pyc_decompile(filenames: list, output_directory: str, version: int=None):
+	# Список заголовков для разных версий python
+	headers = {
+		34: b'\xee\x0c\r\n\x11;\x8d_\x93!\x00\x00',
+		36: b'3\r\r\n0\x07>]a4\x00\x00',
+		37: b'B\r\r\n\x00\x00\x00\x000\x07>]a4\x00\x00',
+		38: b'U\r\r\n\x00\x00\x00\x000\x07>]a4\x00\x00',
+	}
 	
-	# Папка в которой будет содержимое ехе файла
-	extract_directory = join(current_directory, 'Extracted')
+	step_size = 100 / len(filenames)
+	header = headers.get(version)
+	fc = File_corrector(headers)
+	bf = Buffer()
+
+	for i, filename in enumerate(filenames, 1):
+		sys.argv = ['uncompile', '-o', output_directory, filename]
+
+		root.title('Дэкомпиляция файла: %s (%i/%i)' % (filename, i, len(filenames)))
+		fc.set_file(filename)
+		if(fc.is_need_correct()):
+			if(version):
+				fc.write_header(header)
+			else:
+				bf.set_stream(sys.stdout)
+				sys.stdout = bf
+				for i in range(4):
+					fc.correct_file()
+					try:
+						uncompile.main_bin()
+					except:
+						continue
+					if(bf.is_has_string('# Successfully decompiled file')):
+						sys.stdout = bf.get_stream()
+						bf.close()
+						break
+
+		uncompile.main_bin()
+		time.sleep(0.1)
+
+# 
+def test():
+	filename = file_variable.get()
+	if(not os.path.exists(filename)):
+		return showwarning('Внимание', 'Неверно указан путь к файлу')
+	elif(len(threading.enumerate()) > 3):
+		return showwarning('Внимание', 'Идет процес дэкомпиляции')
+	else:
+		main()
+
+# 
+@Thread
+def main():
+	# Получение имени папки проэкта
+	filename = file_variable.get()
+	path, extention = os.path.splitext(filename)
+	# Получение текущей директории
+	current_directory = os.path.dirname(filename)
+	# Папка в которой будет содержимое .ехе файла
+	extract_directory = os.path.join(current_directory, 'Extracted')
+
+	if(extention == '.pyc'):
+		# Декомпиляция файлов в скрипты
+		pyc_decompile([filename], path + '.py') 
+		open_output_folder(current_directory)
 
 	# Если установлен флаг ехе начнется распаковка приложения
-	if flag == '.exe':
+	if(extention == '.exe'):
 		# Папка в которой будет хранится байт-код подключаймых модулей
-		cache_directory   = join(current_directory, 'Pycache')
-
+		cache_directory   = os.path.join(current_directory, 'Pycache')
 		# Объявление папки для сохранения скриптов используймых модулей
-		modules_directory = join(current_directory,'Modules')
-
+		modules_directory = os.path.join(current_directory,'Modules')
 		# Объявление папки для сохранения основных скриптов программы
-		scripts_directory = join(current_directory, 'Main')
-
+		scripts_directory = os.path.join(current_directory, 'Main')
+		
 		# Создание папок
-		create_directory(current_directory, extract_directory, modules_directory, cache_directory, scripts_directory)
+		for folder in (extract_directory, modules_directory, cache_directory, scripts_directory):
+			
+			if(os.path.exists(folder)):
+				remove_folder(folder)
 
-		# Передача extractor'у пути для сохранения кеша модулей 
-		extractor.set_cache_path(cache_directory)
+			create_folder(folder)
 
-		# Передача extractor'у пути для сохранения содержимого ехе файла
-		extractor.set_extra_path(extract_directory)
-
-		# Запуск декомпиляции проекта с помощью модуля extractor
+		# Передача pyinstxtractor'у пути для сохранения кэша модулей 
+		pyinstxtractor.set_cache_path(cache_directory)
+		# Передача pyinstxtractor'у пути для сохранения содержимого ехе файла
+		pyinstxtractor.set_extra_path(extract_directory)
+		# Запуск декомпиляции проекта с помощью модуля pyinstxtractor или unpy2exe
 		try:
-			extractor.main()
+			if(len(sys.argv)) > 1:
+				sys.argv[1] = filename
+			else:
+				sys.argv.append(filename)
 
-			# Получениие списка возможних файлов 
-			main_files = extractor.get_main_files()
+			pyinstxtractor.main()
+			# Получение списка возможных основных файлов
+			files = pyinstxtractor.get_main_files()
+			# Получение версии python в формате 34, 36, 37, 38
+			pyver = pyinstxtractor.get_pyver()
+			
+			# Эти библиотеки всегда в списке основных библиотек, но не относятся к ним
+			if('pyi_rth_multiprocessing' in files):
+				files.remove('pyi_rth_multiprocessing')
+			if('pyiboot01_bootstrap' in files):
+				files.remove('pyiboot01_bootstrap')
+			if('pyi_rth_qt4plugins' in files):
+				files.remove('pyi_rth_qt4plugins')
 
-			for f in main_files:
-				rename(join(extract_directory, f), join(extract_directory, f + '.pyc'))
+			main_files = [os.path.join(extract_directory, filename) for filename in files]
+
+			for filename in main_files:
+				os.rename(filename, filename + '.pyc')
+			# Добавление расширения к именам файлов
+			main_files = [filename + '.pyc' for filename in main_files]
 
 			# Декомпиляция файлов в скрипт
-			cache_decompiler(main_files, extract_directory, scripts_directory)
+			pyc_decompile(main_files, scripts_directory, pyver)
 
-			# Спрашивает нужно ли компилоровать все .pyc файлы 
-			while True and auto_lib_decompiling is None:
-				answer = input('[?] Decompile all pycache files? (y/n): ').lower()
-				if answer == 'y':
-					# Декомпиляция файлов в скрипт
-					cache_decompiler(None, cache_directory, modules_directory)
-					break
-				if answer == 'n':
-					break
+			if(is_decompile_sublibraries.get() == 1):
+				cache_files = [os.path.join(cache_directory, file) for file in os.listdir(cache_directory)]
+				pyc_decompile(cache_files, modules_directory, pyver)
+				open_output_folder(modules_directory)
+
 		except:
-			try:
-				print(Fore.YELLOW + '[>] Beginning extraction with py2exe!')
-				unpy2exe.unpy2exe(sys.argv[1], '%s.%s' % sys.version_info[0:2], extract_directory)
-				print(Fore.GREEN + '[>] decoding completed successfully!')
-				# Декомпиляция файлов в скрипт
-				cache_decompiler(None, extract_directory, scripts_directory)
-			except Exception as e: #Обычно возникает когда файл не той же версии что и питон!
-				print(Fore.RED + '[!] %s' % e)
-				print(Fore.RED + '[!] The program can not decompile the file!')
-				open_directory(extract_directory)
+			# По крайней мере у меня на винде не работает
+			if(platform.system() == 'Windows'):
+				# В названии присутствуют запрещенные символы '<>'
+				unpy2exe.IGNORE.append('<boot hacks>.pyc')
+				# Делаем заглушку, поскольку с заголовками от функции unpy2exe._generate_pyc_header 
+				# байт-код не компилируется в чистый код
+				unpy2exe._generate_pyc_header = _generate_pyc_header
+			
+			unpy2exe.unpy2exe(filename, '%s.%s' % sys.version_info[:2], extract_directory)
+			main_files = glob.glob('%s\\*.pyc' % extract_directory)
+			# Декомпиляция файлов в скрипт
+			pyc_decompile(main_files, scripts_directory)
 
-	# Если установлен флаг 'pyc' начнется распаковка файлов кэша
-	if flag == '.pyc':
-		# Создание папки для сохранения основных скриптов программы
-		create_directory(current_directory)
+		finally:
+			time.sleep(3)
+			showinfo('Успех', 'Дэкомпиляция закончена')
+			root.title('Decompiller 2.0')
+			open_output_folder(scripts_directory)
 
-		# Получение файла для декеширования
-		file = [sys.argv[1]]
+# 
+def ui():
+	Label(root, text='Введите путь к дэкомпилируемой программе или скрипту', bg=bg, font=font_style).place(x=7, y=10)
+	edit = EntryContextMenuWrapper(root=root, textvariable=file_variable, bd=0, font='Verdana 10', width=54)
+	edit.place(x=10, y=35, width=630, height=20)
+	add_hot_keys(edit)
+	Button(root, text='...', bg='white', bd=0, font=font_style, command=lambda: select_file(file_var)).place(x=641, y=35, height=20)
 
-		# Декомпиляция файлов в скрипты
-		cache_decompiler(file, current_directory, current_directory)
+	Checkbutton(root, text='Дэкомпилировать все дополнительные библиотеки', 
+		variable=is_decompile_sublibraries, 
+		onvalue=1, 
+		offvalue=0, 
+		bg=bg, 
+		font=font_style).place(x=5, y=55)
 
-# Ввод пути к файлам или папке
-def entry_directory(path=None):
-	while True:
-		global auto_lib_decompiling, lock_open_directory
-		if path is None:
-			print(Fore.CYAN + '[>] Введите путь к файлу или папке:')
-			path = input('[<] ').split(' ')
-		if '--y' in path:
-			path.remove('--y') 
-			auto_lib_decompiling = True 
-		if '--n' in path:
-			path.remove('--n')  
-			auto_lib_decompiling = False
-		if '--h' in path:
-			path.remove('--h')  
-			lock_open_directory = True	
-		if 'exit' in path:
-			return []
-		if len(path) == 1:
-			path = path[0]
-			if isdir(path):
-				files = []
-				directory = splitext(path)[0]
-				for f in listdir(path):
-					if isdir(join(directory,f)) is not True:
-						if splitext(f)[1] in ('.pyc', '.exe'):
-							files.append(directory + '\\' + f)	
-				return [sys.argv[0]] + files
+	Button(root, text='Дэкомпилировать', bg='white', bd=0, font=font_style, command=test).place(x=520, y=60, height=20)
 
-			elif exists(path):
-				return [sys.argv[0]] + [path]
-			else:
-				print(Fore.RED + '[!] wrong way: ' + path)
-		else:
-			if type(path) is not list:
-				path = [path]
-			return [sys.argv[0]] + path
+	if(len(sys.argv) > 1):
+		file_variable.set(sys.argv[1])
 
+	root.mainloop()
 
-# Сюда передается список файлов, которые будут декомпилированы по очереди
-def decompiler(argv):
-	for num, arg in enumerate(argv[1:]):
-		# Если файл существует передает аргумент в системный поток для дальнейшей работы
-		#! Не удалять вторую проверку, будет ошибка на строке 264
-		if exists(arg) and isdir(arg) is not True:
-			flag = splitext(arg)[1]
-			sys.argv = [argv[0]] + [arg]
-			if num > 0:
-				print(Fore.YELLOW + '[ ]')
-			print(Fore.YELLOW + '[!] Step %i of %i' % (num + 1, len(argv)-1) )
-			print(Fore.YELLOW + '[>] Starting decompilation...')
-			main(flag)
-		else:
-			print(Fore.RED + '[!] Enter the correct list!')
-	reset()
-
-# Вызов справки
-def help():
-	command_list = [
-	'Список комманд:',
-	'exit      - завершает выполнение программы', 
-	'help      - печатает подказку',
-	'decompile - разпаковувает исполняймый файл',
-	'',
-	'Краткое описание:',
-	'Для запуска декомпиляции после комманды \'decompile\' требуется ввести путь к файлам или папке.',
-	'- Если ввести много вайлов программа декомпилирует их по очереди. ',
-	'- ' + Fore.RED + 'Важно' + Fore.YELLOW + ', после декомпиляции основных скриптов прораммы нужно будет дать ответ нужно ли декомпилировать библиотеки,',
-	'- или передать флажок --y/--n после директории программы.',
-	'- Также если установить флажок --h после декомпиляции файлов директории с ними НЕ будут открыватся автоматически.',
-	'- Если ввести путь к папке, программа попытается декомпилировать все \'.exe\' или \'.pyc\' файлы.',
-	'Пример:',
-	Fore.CYAN + '[>] Введите комманду:',
-	Fore.WHITE + '[<] decompile или --d',
-	Fore.CYAN + '[>] Введите путь к файлу или папке:',
-	Fore.WHITE + '[<] C:\\...\\filename.exe --n --h' + Fore.MAGENTA + ' #Запуск декомпиляции \'filename.exe\' без декомпиляции библиотек \'--n\' ',
-	Fore.MAGENTA + '\tи открытия конечной папки со скриптами \'--h\' ',
-	'Или можно сделать так:',
-	Fore.CYAN + '[>] Введите комманду:',
-	Fore.WHITE + '[<] --d C:\\...\\filename.exe --n --h' + Fore.MAGENTA + ' #Комманда одной строкой',
-	'Если вместо пути к файлу написать \'exit\' программа выйдет в основной цикл.']
-
-	for line in command_list:
-		print(Fore.YELLOW + '[i] ' + line )
-
-
+# 
 if __name__ == '__main__':
-
-	if len(sys.argv) >= 2:	
-		decompiler(entry_directory(sys.argv[1:]))
-
-	while True:
-		print(Fore.CYAN + '[>] Введите комманду:')
-
-		command = input('[<] ').lower().strip().split()
-
-		if 'help' in command:
-			help()
-		elif 'exit' in command:
-			exit()
-		elif 'decompile' in command or '--d' in command:
-			command.remove(command[0])
-			for val in command:
-				if exists(val) or isdir(val) is True:
-					decompiler(entry_directory(command))
-					break
-			else:
-				decompiler(entry_directory())
-
-		else:
-			print(Fore.RED+'[!] Не удалось распознать комманду \'%s\' !' % ' '.join(command))
-
-	#python E:\Python\Decompiler\Decompiler.py E:\Python\Decompiler\f.exe E:\Python\Decompiler\progressbar.exe --n --h
-	#python E:\Python\Decompiler\Decompiler.py E:\Python\Decompiler\progressbar.exe
-	#python E:\Python\Decompiler\Decompiler.py E:\Python\Decompiler\dist\progressbar.exe
-	#python E:\Python\Decompiler\Decompiler.py E:\Python\Decompiler\Instainspector.exe
+	ui()

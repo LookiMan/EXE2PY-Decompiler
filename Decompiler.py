@@ -3,6 +3,7 @@
 Установка дополнительных библиотек:
 pip install unpy2exe
 pip install uncompyle6
+pip install keyboard
 
 Принцип работы скрипта:
 В поле для ввода указываете путь к файлу .exe (скомпилированным с помощью pyinstaller или py2exe) или к байт-коду (.pyc) 
@@ -199,7 +200,7 @@ def pyc_decompile(filenames: list, output_directory: str, version: int=None):
 	for i, filename in enumerate(filenames, 1):
 		sys.argv = ['uncompile', '-o', output_directory, filename]
 
-		root.title('Дэкомпиляция файла: %s (%i/%i)' % (filename, i, len(filenames)))
+		root.title('Декомпиляция файла: %s (%i/%i)' % (filename, i, len(filenames)))
 		fc.set_file(filename)
 		if(fc.is_need_correct()):
 			if(version):
@@ -320,7 +321,7 @@ def main():
 
 		finally:
 			time.sleep(3)
-			showinfo('Успех', 'Дэкомпиляция закончена')
+			showinfo('Успех', 'Декомпиляция закончена')
 			root.title('Decompiller 2.0')
 			open_output_folder(scripts_directory)
 
@@ -332,14 +333,14 @@ def ui():
 	add_hot_keys(edit)
 	Button(root, text='...', bg='white', bd=0, font=font_style, command=lambda: select_file(file_var)).place(x=641, y=35, height=20)
 
-	Checkbutton(root, text='Дэкомпилировать все дополнительные библиотеки', 
+	Checkbutton(root, text='Декомпилировать все дополнительные библиотеки', 
 		variable=is_decompile_sublibraries, 
 		onvalue=1, 
 		offvalue=0, 
 		bg=bg, 
 		font=font_style).place(x=5, y=55)
 
-	Button(root, text='Дэкомпилировать', bg='white', bd=0, font=font_style, command=test).place(x=520, y=60, height=20)
+	Button(root, text='Декомпилировать', bg='white', bd=0, font=font_style, command=test).place(x=520, y=60, height=20)
 
 	if(len(sys.argv) > 1):
 		file_variable.set(sys.argv[1])

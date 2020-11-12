@@ -331,7 +331,7 @@ def ui():
 	edit = EntryContextMenuWrapper(root=root, textvariable=file_variable, bd=0, font='Verdana 10', width=54)
 	edit.place(x=10, y=35, width=630, height=20)
 	add_hot_keys(edit)
-	Button(root, text='...', bg='white', bd=0, font=font_style, command=lambda: select_file(file_var)).place(x=641, y=35, height=20)
+	Button(root, text='...', bg='white', bd=0, font=font_style, command=lambda: select_file(file_variable)).place(x=641, y=35, height=20)
 
 	Checkbutton(root, text='Декомпилировать все дополнительные библиотеки', 
 		variable=is_decompile_sublibraries, 

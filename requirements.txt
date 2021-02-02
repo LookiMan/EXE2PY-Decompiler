@@ -1,0 +1,4 @@
+colorama
+keyboard
+uncompyle6
+unpy2exe

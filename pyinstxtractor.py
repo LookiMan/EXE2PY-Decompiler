@@ -91,23 +91,29 @@ import py_compile
 import time 
 from uuid import uuid4 as uniquename
 
-errors = []
-main_files = []
-pyver = None
+
+ImportErrors = []
+
+MAIN_FILES = []
+EXTRACTION_DIR = None
+CACHE_DIRECTORY = None
+
 
 try:
     from colorama import Fore, init
 except ImportError:
-    errors.append("Не найден модуль 'colorama'! \nУстановите модуль коммандой pip install colorama ")
-except Exception as e:
-    errors.append(e)
+    ImportErrors.append("Не найден модуль 'colorama'! \nУстановите модуль коммандой pip install colorama ")
+except Exception as exc:
+    ImportErrors.append(exc)
 
-if len(errors) > 0:
-    for e in errors:
-        print(e)
+if len(ImportErrors) > 0:
+    for error in ImportErrors:
+        print(error)
+    
     exit(1)
 
 init(autoreset=True)
+
 
 class CTOCEntry:
     def __init__(self, position, cmprsdDataSize, uncmprsdDataSize, cmprsFlag, typeCmprsData, name):
@@ -239,16 +245,13 @@ class PyInstArchive:
         print(Fore.CYAN + '[>] Found {0} files in CArchive'.format(len(self.tocList)))
 
 
-
     def extractFiles(self):
-        global main_files, extractionDir
-        main_files = []
         print(Fore.YELLOW + '[>] Beginning extraction...please standby')
 
-        if not os.path.exists(extractionDir):
-            os.mkdir(extractionDir)
+        if not os.path.exists(EXTRACTION_DIR):
+            os.mkdir(EXTRACTION_DIR)
 
-        os.chdir(extractionDir)
+        os.chdir(EXTRACTION_DIR)
 
         for entry in self.tocList:
             basePath = os.path.dirname(entry.name)
@@ -266,22 +269,20 @@ class PyInstArchive:
                 # Comment out the assertion in such a case
                 assert len(data) == entry.uncmprsdDataSize # Sanity Check
 
-            file = os.path.join(extractionDir, entry.name)
+            file = os.path.join(EXTRACTION_DIR, entry.name)
 
             with open(file, 'wb') as f:
                 f.write(data)
 
             if entry.typeCmprsData == b's':
                 print(Fore.GREEN + '[+] Possible entry point: {0}'.format(entry.name))
-                main_files.append(entry.name)
+                MAIN_FILES.append(entry.name)
 
             elif entry.typeCmprsData == b'z' or entry.typeCmprsData == b'Z':
                 self._extractPyz(entry.name)
 
 
     def _extractPyz(self, name):
-        global cache_directory
-
         with open(name, 'rb') as f:
             pyzMagic = f.read(4)
             assert pyzMagic == b'PYZ\0' # Sanity Check
@@ -318,7 +319,7 @@ class PyInstArchive:
                     pass
 
                 # Make sure destination directory exists, ensuring we keep inside dirName
-                destName = os.path.join(cache_directory, fileName)
+                destName = os.path.join(CACHE_DIRECTORY, fileName)
                 destDirName = os.path.dirname(destName)
                 if not os.path.exists(destDirName):
                     os.makedirs(destDirName)
@@ -339,19 +340,9 @@ class PyInstArchive:
                     pycFile.write(data)
 
 
-def set_extra_path(path):
-    global extractionDir
-    extractionDir = path
-
-def set_cache_path(path):
-    global cache_directory
-    cache_directory = path
-
-def get_main_files():
-    return main_files
-
 def get_pyver():
     return pyver
+
 
 def main():
     global pyver

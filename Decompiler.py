@@ -1,352 +1,461 @@
 ﻿# -*- coding: UTF-8 -*-
-'''
-Установка дополнительных библиотек:
-pip install unpy2exe
-pip install uncompyle6
-pip install keyboard
-
-Принцип работы скрипта:
-В поле для ввода указываете путь к файлу .exe (скомпилированным с помощью pyinstaller или py2exe) или к байт-коду (.pyc) 
-С помощью pyinstxtractor извлекается содержимое файла
-После чего с помощью библиотеки uncompyle6 извлеченные файлы c расширением .pyc компилируются в код
-
-Особенности работы скрипта:
-Можно дэкомпилировать байт-код версий python 3.4, 3.6, 3.7 скомпилированы
-'''
-
-from tkinter import (Tk, StringVar, IntVar, Label, Button, Checkbutton)
-from tkinter.filedialog import askopenfilename
-from tkinter.messagebox import (showinfo, showwarning, showerror)
-
-import threading
-import platform
 import os
+import io
 import sys
-import time
-import glob
-import shutil
 
-try:
-	import keyboard
-except Exception as exc:
-	showerror(exc.msg)
+ImportErrors = list()
 
 try:
 	from uncompyle6.bin import uncompile
 except Exception as exc:
-	showerror(exc.msg)
+	ImportErrors.append(exc.msg)
 
 try:
 	import unpy2exe
 except Exception as exc:
-	showerror(exc.msg)
+	ImportErrors.append(exc.msg)
 
 try:
 	import pyinstxtractor
 except Exception as exc:
-	showerror(exc.msg)
+	ImportErrors.append(exc.msg)
 
-from popup_menu import EntryContextMenuWrapper
+import ui
+import utils
 
 
 
-bg = '#0FA75F'
-font_style = 'Verdana 11'
-version = int('%i%i' % (sys.version_info[0], sys.version_info[1])) # формат версии 34, 36, 37, 38
-
-root = Tk()
-root.geometry('675x95')
-root.title('Decompiller 2.0')
-root.configure(bg=bg)
-root.resizable(width=False, height=False)
-
-file_variable = StringVar()
-is_decompile_sublibraries = IntVar()
-
-# 
-def Thread(my_funk):
-	def wrapper(*args, **kwargs):
-		my_thread = threading.Thread(target=my_funk, daemon=True, args=args, kwargs=kwargs)
-		my_thread.start()
-	return wrapper
-
-# Класс имитирующий sys.stdout для для перехвата данных 
-class Buffer:
+class StreamBuffer:
+	""" Класс имитирующий sys.stdout для для перехвата данных """
 	def __init__(self):
-		self._stream = None
-		self._data = []
+		self.stream = None
+		self.data = list()
 
 
-	def set_stream(self, stream):
-		self._stream = stream
+	def intercept_stream(self, stream):
+		""" перехват потока и подмена его собой """
+		self.stream = stream
+		# 
+		sys.stdout = self
 
 
-	def get_stream(self):
-		return self._stream
+	def release_stream(self):
+		""" освобождение потока """ 
+		sys.stdout = self.stream
+
+		self.stream = None
 
 
 	def write(self, text):
-		self._data.append(text)
+		""" Запись данных в буфер """
+		self.data.append(text)
 
 
 	def flush(self):
+		""" Заглушка сброса буфера """
 		pass
 
 
+	def write_data_to_file(self, filename):
+		""" Запись перехваченого потода sys.stdout в файл """
+		with open(filename, mode='a') as file:
+			file.write(''.join(self.data))
+		# 
+		self.data = list()
+
+
 	def is_has_string(self, string):
-		for line in self._data:
+		""" Поиск строки в списке """
+		for line in self.data:
 			if(string in line):
 				return True
 
-# Класс для коррекции заголовка .pyc файла 
-class File_corrector:
-	def __init__(self, headers):
-		self._headers = [header for header in headers.values()]
-		self._filename = None
-		self._iter = 0
+
+class HeaderCorrectorMainFiles:
+	""" Класс для подбора заголовка для .pyc файла """
+	def __init__(self, headers: list):
+		self.headers = headers
+		self.filename = None
+		self.iteration = 0
+		self.bytes = b''
 
 
 	def set_file(self, filename):
-		self._filename = filename
-		self._file_handler = open(self._filename, mode='rb')
-		self._bytes = self._file_handler.read()
-		self._file_handler.close()
-		self._iter = 0
+		""" Сохранение имени файла и сохранение содержимого данного файла """
+		self.filename = filename
+		
+		fp = open(self.filename, mode='rb')
+		self.bytes = fp.read()
+		fp.close()
+		
+		self.iteration = 0
+
+
+	def get_range_iterations(self):
+		""" Формирует диапазон с количеством возможных итераций """
+		return range(len(self.headers))
 
 
 	def is_need_correct(self):
-		with open(self._filename, mode='rb') as file:
-			byte = file.read(1)
-			if(byte == b'\xe3'):
+		""" Проверка первого байта файла """
+		with open(self.filename, mode='rb') as file:
+			first_byte = file.read(1)
+			if first_byte == b'\xe3':
 				return True
 			return False		
 
 
 	def correct_file(self):
-		with open(self._filename, mode='wb') as file:
-			file.write(self._headers[self._iter])
-			file.write(self._bytes)
-		self._iter += 1
+		""" Дописывает заголок в начало файла """
+		with open(self.filename, mode='wb') as file:
+			file.write(self.headers[self.iteration])
+			file.write(self.bytes)
+		
+		self.iteration += 1
 
 
-	def write_header(self, header):
-		with open(self._filename, mode='wb') as file:
-			file.write(header)
-			file.write(self._bytes)
+class HeaderCorrectorSubLibraries:
+	""" Класс для коррекции заголовка кэш-файла для версий python 3.7, 3.8 """
+	def __init__(self):
+		self.filename = None
+		self.correct_bytes = b'\x00\x00\x00\x00'
 
-# Выполняет роль заглушки
-def _generate_pyc_header(python_version, size):
-	return b''
 
-# Добавление гарячих клавиш полю для ввода
-def add_hot_keys(element):
-	keyboard.add_hotkey('ctrl+c', element.copy_selection)
-	keyboard.add_hotkey('ctrl+x', element.cut_selection)
-	keyboard.add_hotkey('ctrl+a', element.select_all)
-	keyboard.add_hotkey('ctrl+v', element.paste_from_clipboard)
-	keyboard.add_hotkey('ctrl+d', element.clearn)
+	def set_file(self, filename):
+		""" Сохранение имени файла """
+		self.filename = filename
 
-# Диалог выбора файла
-def select_file(variable: object):
-	root.wm_attributes('-topmost', 1)
-	if(platform.system() == "Darwin"):
-		file_path = askopenfilename(parent=root)
-	else:
-		file_path = askopenfilename(parent=root, filetypes=[('All files', '*')])
 
-	file_path = file_path.replace('/', '\\')
+	def is_need_correct(self):
+		""" Проверка позиции контрольного байта """
+		with open(self.filename, mode='rb') as file:
+			file.seek(12)
+			if file.read(1) == b'\xe3':
+				return True
+			return False		
+
+
+	def correct_file(self):
+		""" Дописывает 4 нулевых байта в заголовок файла """
+
+		fp = open(self.filename, mode='rb')
+		# 
+		data = io.BytesIO(fp.read())
+
+		fp.close()
+
+		with open(self.filename, mode='wb') as file:
+			file.write(data.read(12))
+			file.write(self.correct_bytes)
+			file.write(data.read())
+
+
+def decompile_pyc_file(filename: str, output_directory: str):
+	""" Расшифровка .pyc в скрипт .py """
+
+	# Заголовки кэш-файлов для разных версий python 
+	headers = utils.HEADERS
+	corrector = HeaderCorrectorMainFiles(headers)
+	corrector.set_file(filename)
+
+	sys.argv = ['uncompile', '-o', output_directory, filename]
+
+	stream_buffer = StreamBuffer()
+	# Перехват потока sys.sdtout  
+	stream_buffer.intercept_stream(sys.stdout)
 	
-	if(file_path != ''):
-		variable.set(file_path)
-
-# Открывает папку с дэкомпилированым проектом
-def open_output_folder(folder: str):
-	if platform.system() == 'Windows':
-		os.system('start "" "%s"' % folder)
-	elif platform.system() == 'Linux':
-		os.system('xdg-open "%s"' % folder)
-	elif platform.system() == 'Darwin':
-		os.system('open "%s"' % folder)
-
-#
-def remove_folder(folder: str):
-	try:
-		shutil.rmtree(folder)
-	except:
-		print('[!] Error removing folder: %s' % folder)
-
-# Создает папку для сохранения скриптов
-def create_folder(folder: str):
-	try:
-		os.mkdir(folder)
-	except:
-		print('[!] Error creating folder: %s' % folder)
-
-# Расшифровка .pyc в скрипт .py
-def pyc_decompile(filenames: list, output_directory: str, version: int=None):
-	# Список заголовков для разных версий python
-	headers = {
-		34: b'\xee\x0c\r\n\x11;\x8d_\x93!\x00\x00',
-		36: b'3\r\r\n0\x07>]a4\x00\x00',
-		37: b'B\r\r\n\x00\x00\x00\x000\x07>]a4\x00\x00',
-		38: b'U\r\r\n\x00\x00\x00\x000\x07>]a4\x00\x00',
-	}
-	
-	step_size = 100 / len(filenames)
-	header = headers.get(version)
-	fc = File_corrector(headers)
-	bf = Buffer()
-
-	for i, filename in enumerate(filenames, 1):
-		sys.argv = ['uncompile', '-o', output_directory, filename]
-
-		root.title('Декомпиляция файла: %s (%i/%i)' % (filename, i, len(filenames)))
-		fc.set_file(filename)
-		if(fc.is_need_correct()):
-			if(version):
-				fc.write_header(header)
+	if corrector.is_need_correct():
+		for _ in corrector.get_range_iterations():
+			corrector.correct_file()
+			try:
+				uncompile.main_bin()
+			except:
+				continue
 			else:
-				bf.set_stream(sys.stdout)
-				sys.stdout = bf
-				for i in range(4):
-					fc.correct_file()
-					try:
-						uncompile.main_bin()
-					except:
-						continue
-					if(bf.is_has_string('# Successfully decompiled file')):
-						sys.stdout = bf.get_stream()
-						bf.close()
-						break
+				if stream_buffer.is_has_string('# Successfully decompiled file'):
+					break
 
-		uncompile.main_bin()
-		time.sleep(0.1)
+	uncompile.main_bin()
 
-# 
-def test():
-	filename = file_variable.get()
-	if(not os.path.exists(filename)):
-		return showwarning('Внимание', 'Неверно указан путь к файлу')
-	elif(len(threading.enumerate()) > 3):
-		return showwarning('Внимание', 'Идет процес дэкомпиляции')
+	stream_buffer.release_stream()
+	stream_buffer.write_data_to_file(os.path.join(utils.PATH_TO_LOG_DIR, utils.make_log_file_name()))
+
+	return 201
+
+
+def decompile_pyc_files(filenames: list, output_directory: str):
+	""" Декомпиляция списка кэш-файлов python """
+	if isinstance(filenames, list):
+		for filename in filenames:
+			decompile_pyc_file(filename, output_directory)
+
+		return 203
+
 	else:
-		main()
+		return 403
 
-# 
-@Thread
-def main():
-	# Получение имени папки проэкта
-	filename = file_variable.get()
-	path, extention = os.path.splitext(filename)
+
+def decompile_sublibrarie(filename: str, output_directory: str):
+	""" Заголовки кэш-файлов библиотек для разных версий python """
+	corrector = HeaderCorrectorSubLibraries()
+	corrector.set_file(filename)
+
+	sys.argv = ['uncompile', '-o', output_directory, filename]
+
+	stream_buffer = StreamBuffer()
+	# Перехват потока sys.sdtout  
+	stream_buffer.intercept_stream(sys.stdout)
+
+	try:
+		uncompile.main_bin()
+	except Exception:
+		"""Для python версии 3.6 заголовок файла на 4 байта короче, и поэтому сначала пытаемся декомпилировать байт-код без изменений, 
+		в случае возникновении ошибки, в заголовок файла дописывается 4 байта, для нормальной декомпиляции кэш-файлов версий 3.7, 3.8"""
+		corrector.correct_file()
+		uncompile.main_bin()
+
+	finally:
+		stream_buffer.release_stream()
+		stream_buffer.write_data_to_file(os.path.join(utils.PATH_TO_LOG_DIR, utils.make_log_file_name()))
+
+		return 202
+
+
+def decompile_sublibraries(filenames: list, output_directory: str):
+	""" Декомпиляция под библиотек python """
+	if isinstance(filenames, list):
+		for filename in filenames:
+			decompile_sublibrarie(filename, output_directory)
+
+		return 204
+
+	else:
+		return 404
+
+
+def decompile_with_pyinstxtractor(filename: str, is_need_decompile_sub_libraries: bool):
+	""" Декомпиляция исполняемого приложения с помощью pyinstxtractor """
 	# Получение текущей директории
 	current_directory = os.path.dirname(filename)
-	# Папка в которой будет содержимое .ехе файла
-	extract_directory = os.path.join(current_directory, 'Extracted')
+	# Папка для сохранения содержимого .ехе файла
+	extract_directory = os.path.join(current_directory, utils.EXTRACTED_DIR)
+	# Папка для байт-кода подключаемых модулей
+	cache_directory = os.path.join(current_directory, utils.PYCACHE_DIR)
+	# Папка для декомпилированных модулей
+	modules_directory = os.path.join(current_directory, utils.MODULES_DIR)
+	# Папка для основных скриптов программы
+	scripts_directory = os.path.join(current_directory, utils.MAIN_DIR)
+	# Создание нужных папок для распаковки программы
+	utils.make_folders([extract_directory, modules_directory, cache_directory, scripts_directory])
+	# Передача pyinstxtractor'у пути для сохранения кэша модулей 
+	pyinstxtractor.CACHE_DIRECTORY = cache_directory
+	# Передача pyinstxtractor'у пути для сохранения содержимого .ехе файла
+	pyinstxtractor.EXTRACTION_DIR = extract_directory
+	
+	if(len(sys.argv)) > 1:
+		sys.argv[1] = filename
+	else:
+		sys.argv.append(filename)
 
-	if(extention == '.pyc'):
-		# Декомпиляция файлов в скрипты
-		pyc_decompile([filename], path + '.py') 
-		open_output_folder(current_directory)
+	stream_buffer = StreamBuffer()
+	# Перехват потока sys.sdtout  
+	stream_buffer.intercept_stream(sys.stdout)
 
-	# Если установлен флаг ехе начнется распаковка приложения
-	if(extention == '.exe'):
-		# Папка в которой будет хранится байт-код подключаймых модулей
-		cache_directory   = os.path.join(current_directory, 'Pycache')
-		# Объявление папки для сохранения скриптов используймых модулей
-		modules_directory = os.path.join(current_directory,'Modules')
-		# Объявление папки для сохранения основных скриптов программы
-		scripts_directory = os.path.join(current_directory, 'Main')
+	pyinstxtractor.main()
+	# Получение списка возможных основных файлов
+	files = pyinstxtractor.MAIN_FILES
+
+	# Эти библиотеки всегда в списке основных библиотек, но не относятся к ним
+	if 'pyi_rth_multiprocessing' in files:
+		files.remove('pyi_rth_multiprocessing')
+	if 'pyiboot01_bootstrap' in files:
+		files.remove('pyiboot01_bootstrap')
+	if 'pyi_rth_qt4plugins' in files:
+		files.remove('pyi_rth_qt4plugins')
+	if 'pyi_rth__tkinter' in files:
+		files.remove('pyi_rth__tkinter')
+	if 'pyi_rth_pyqt5' in files:
+		files.remove('pyi_rth_pyqt5')
+
+	main_files = [os.path.join(extract_directory, filename) for filename in files]
+
+	for filename in main_files:
+		os.rename(filename, filename + '.pyc')
+	# Добавление расширения к именам файлов
+	main_files = [filename + '.pyc' for filename in main_files]
+
+	stream_buffer.release_stream()
+	stream_buffer.write_data_to_file(os.path.join(utils.PATH_TO_LOG_DIR, utils.make_log_file_name()))
+
+	decompile_pyc_files(main_files, scripts_directory)
+
+	if is_need_decompile_sub_libraries is True:
+		cache_files = [os.path.join(cache_directory, file) for file in os.listdir(cache_directory)]
 		
-		# Создание папок
-		for folder in (extract_directory, modules_directory, cache_directory, scripts_directory):
+		decompile_sublibraries(cache_files, modules_directory)
+
+
+def decompile_with_unpy2exe(filename: str):
+	""" Декомпиляция исполняемого приложения с помощью unpy2exe """
+	# Получение текущей директории
+	current_directory = os.path.dirname(filename)
+	# Папка для сохранения содержимого .ехе файла
+	extract_directory = os.path.join(current_directory, utils.EXTRACTED_DIR)
+	# Папка для основных скриптов программы
+	scripts_directory = os.path.join(current_directory, utils.MAIN_DIR)
+	
+	if(utils.platform.system() == 'Windows'):
+		# В названии присутствуют запрещенные символы символы  для windows '<, >'
+		unpy2exe.IGNORE.append('<boot hacks>.pyc')
+		# Делаем заглушку, поскольку с заголовками от функции unpy2exe._generate_pyc_header 
+		# байт-код не компилируется в чистый код
+		unpy2exe._generate_pyc_header = utils._generate_pyc_header
+	
+	unpy2exe.unpy2exe(filename, '%s.%s' % sys.version_info[:2], extract_directory)
+	# Поиск всех .pyc файлов в папке с распакованным содержимым .exe файла для 
+	# дальнейшей их декомпиляции в исходный код python
+	main_files = utils.search_pyc_files(extract_directory)
+	
+	decompile_pyc_files(main_files, scripts_directory)
+
+
+def decompile_python_cache_file(filename: str):
+	""" Главная функция для декомпиляции .pyc файлов """
+	output_directory = os.path.dirname(filename)
+	
+	try:
+		status_code = decompile_pyc_file(filename, output_directory)
+	except Exception:
+		status_code = 501
+	finally:
+		return status_code
+
+
+def decompile_python_cache_files(filenames: list):
+	""" Главная функция для декомпиляции .pyc файлов """
+	if len(filenames) == 0:
+		return 405
+
+	output_directory = os.path.dirname(filenames[0])
+	
+	try:
+		status_code = decompile_pyc_files(filenames, output_directory)
+	except Exception:
+		status_code = 501
+	finally:
+		return status_code
+
+
+def decompile_python_sublibrarie(filename: str):
+	""" Главная функция для декомпиляции дополнительной библиотеки """
+	output_directory = os.path.dirname(filename)
+	
+	try:
+		status_code = decompile_sublibrarie(filename, output_directory)
+	except Exception as exc:
+		status_code = 503
+	finally:
+		return status_code
+
+
+def decompile_python_sublibraries(filenames: list):
+	""" Главная функция для декомпиляции списка дополнительных библиотек """
+	if len(filenames) == 0:
+		return 405
+	
+	output_directory = os.path.dirname(filenames[0])
+
+	try:
+		status_code = decompile_sublibraries(filenames, output_directory)
+	except Exception:
+		status_code = 503
+	finally:
+		return status_code
+
+
+def decompile_executable(filename: str, is_need_decompile_sub_libraries: bool):
+	""" Главная функция для декомпиляции .exe файлов """
+	try:
+		decompile_with_pyinstxtractor(filename, is_need_decompile_sub_libraries)
+	except Exception:
+		"""Выбросит данное исключение в случае, если программа скомпилирована не с помощью pyinstaller"""
+		decompile_with_unpy2exe(filename)
+	except (ValueError, TypeError, ImportError, FileNotFoundError, PermissionError):
+		return 500
+	else:
+		return 200
+	
+ 
+def start_decompile(filename: str, is_need_decompile_sub_libraries: bool,
+	is_need_open_output_folder: bool):
+	""" Начало декомпиляции """
+
+	if filename.endswith('.pyc'):
+		if is_need_decompile_sub_libraries is False:
+			status_code = decompile_python_cache_file(filename)
+
+		if is_need_decompile_sub_libraries is True:
+			status_code = decompile_python_sublibrarie(filename)
 			
-			if(os.path.exists(folder)):
-				remove_folder(folder)
+		if is_need_open_output_folder is True:
+			current_directory = os.path.dirname(filename)
+			utils.open_output_folder(current_directory)
 
-			create_folder(folder)
 
-		# Передача pyinstxtractor'у пути для сохранения кэша модулей 
-		pyinstxtractor.set_cache_path(cache_directory)
-		# Передача pyinstxtractor'у пути для сохранения содержимого ехе файла
-		pyinstxtractor.set_extra_path(extract_directory)
-		# Запуск декомпиляции проекта с помощью модуля pyinstxtractor или unpy2exe
-		try:
-			if(len(sys.argv)) > 1:
-				sys.argv[1] = filename
-			else:
-				sys.argv.append(filename)
+	elif filename.endswith('.exe'):
+		status_code = decompile_executable(filename, is_need_decompile_sub_libraries)
 
-			pyinstxtractor.main()
-			# Получение списка возможных основных файлов
-			files = pyinstxtractor.get_main_files()
-			# Получение версии python в формате 34, 36, 37, 38
-			pyver = pyinstxtractor.get_pyver()
+		if is_need_open_output_folder is True:
+			current_directory = os.path.dirname(filename)
+			# Папка для основных скриптов программы
+			scripts_directory = os.path.join(current_directory, utils.MAIN_DIR)
+			utils.open_output_folder(scripts_directory)
+
+	
+	elif os.path.isdir(filename):
+		filenames = utils.search_pyc_files(filename)
+
+		if is_need_decompile_sub_libraries is False:
+			status_code = decompile_python_cache_files(filenames)
+
+		if is_need_decompile_sub_libraries is True:
+			status_code = decompile_python_sublibraries(filenames)
 			
-			# Эти библиотеки всегда в списке основных библиотек, но не относятся к ним
-			if('pyi_rth_multiprocessing' in files):
-				files.remove('pyi_rth_multiprocessing')
-			if('pyiboot01_bootstrap' in files):
-				files.remove('pyiboot01_bootstrap')
-			if('pyi_rth_qt4plugins' in files):
-				files.remove('pyi_rth_qt4plugins')
+		if is_need_open_output_folder is True:
+			current_directory = os.path.dirname(filename)
+			utils.open_output_folder(current_directory)
 
-			main_files = [os.path.join(extract_directory, filename) for filename in files]
 
-			for filename in main_files:
-				os.rename(filename, filename + '.pyc')
-			# Добавление расширения к именам файлов
-			main_files = [filename + '.pyc' for filename in main_files]
+	elif not filename.endswith('.exe') and not filename.endswith('.pyc'):
+		status_code = 400
 
-			# Декомпиляция файлов в скрипт
-			pyc_decompile(main_files, scripts_directory, pyver)
 
-			if(is_decompile_sublibraries.get() == 1):
-				cache_files = [os.path.join(cache_directory, file) for file in os.listdir(cache_directory)]
-				pyc_decompile(cache_files, modules_directory, pyver)
-				open_output_folder(modules_directory)
+	else:
+		status_code = 402
 
-		except:
-			# По крайней мере у меня на винде не работает
-			if(platform.system() == 'Windows'):
-				# В названии присутствуют запрещенные символы '<>'
-				unpy2exe.IGNORE.append('<boot hacks>.pyc')
-				# Делаем заглушку, поскольку с заголовками от функции unpy2exe._generate_pyc_header 
-				# байт-код не компилируется в чистый код
-				unpy2exe._generate_pyc_header = _generate_pyc_header
-			
-			unpy2exe.unpy2exe(filename, '%s.%s' % sys.version_info[:2], extract_directory)
-			main_files = glob.glob('%s\\*.pyc' % extract_directory)
-			# Декомпиляция файлов в скрипт
-			pyc_decompile(main_files, scripts_directory)
 
-		finally:
-			time.sleep(3)
-			showinfo('Успех', 'Декомпиляция закончена')
-			root.title('Decompiller 2.0')
-			open_output_folder(scripts_directory)
+	return status_code
 
-# 
-def ui():
-	Label(root, text='Введите путь к дэкомпилируемой программе или скрипту', bg=bg, font=font_style).place(x=7, y=10)
-	edit = EntryContextMenuWrapper(root=root, textvariable=file_variable, bd=0, font='Verdana 10', width=54)
-	edit.place(x=10, y=35, width=630, height=20)
-	add_hot_keys(edit)
-	Button(root, text='...', bg='white', bd=0, font=font_style, command=lambda: select_file(file_variable)).place(x=641, y=35, height=20)
 
-	Checkbutton(root, text='Декомпилировать все дополнительные библиотеки', 
-		variable=is_decompile_sublibraries, 
-		onvalue=1, 
-		offvalue=0, 
-		bg=bg, 
-		font=font_style).place(x=5, y=55)
+def main():
+    app = ui.QApplication(sys.argv)
 
-	Button(root, text='Декомпилировать', bg='white', bd=0, font=font_style, command=test).place(x=520, y=60, height=20)
+    if len(ImportErrors) > 0:
+    	message = '\n'.join(ImportErrors) 
 
-	if(len(sys.argv) > 1):
-		file_variable.set(sys.argv[1])
+    	ui.show_error('Критическая ошибка', message)
 
-	root.mainloop()
+    if not os.path.exists(utils.PATH_TO_LOG_DIR):
+    	utils.create_folder(utils.PATH_TO_LOG_DIR)
 
-# 
+    widget = ui.MainWindow()
+    widget.worker = start_decompile
+
+    if len(sys.argv) == 2:
+    	widget.lineEdit.setText(sys.argv[1])
+
+    sys.exit(app.exec_())
+
+
 if __name__ == '__main__':
-	ui()
+	main()

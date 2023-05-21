@@ -1,49 +1,63 @@
 # EXE2PY-Decompiler
 
-С помощью данной программы можно декомпилировать исполняемые файлы, созданные с помощью **pyinstaller** или **py2exe**.
+With this program you can decompile executable files created using **pyinstaller** or **py2exe**.
 
-Также возможно декомпилировать отдельные кэш-файлы назад в исходный код python.
+It is also possible to decompile individual cache files back into the original python source code.
 
 <hr>
 
-*Скриншот главного окна приложения*
+*Screenshot of the main application window*
 
 ![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/MainForm.PNG)
 
 
-**Что нового**
+**What's new:**
 
-- Полностью переработан графический интерфейс
+- Completely redesigned graphical interface
 
-- Добавлена поддержка ***DRAG & DROP*** для ```LineEdit```
+- Added support for ***DRAG & DROP*** for ```LineEdit```
 
-- Добавлена возможность указывать папку для декомпиляции её содержимого
+- Added the ability to specify a folder to decompile its contents
 
-- Значительно переписан код
-
-
-
-**Фиксы:**
-
-- Исправлена проблема с декомпиляции кода версии 3.6 старшими версиями python
-
-- Добавлена возможность прерывания процесса декомпиляции
-
-- Добавлен баннер, появляющийся во время работы декомпилятора
+- Code significantly rewritten
 
 
+**Fixes:**
 
-**Примечание:**
+- Fixed the problem of decompiling version 3.6 code with older versions of python
 
-Если не удается декомпилировать одну из библиотек с папки ```EXE2PY_Pycache``` переключите флажок «декомпилировать все дополнительные библиотеки» в активное положение и повторите попытку.
+- Added the ability to interrupt the decompilation process
 
-Программа может работать на версиях python 3.4, 3.6, 3.7. 
-С её помощью, возможно, декомпилировать программы ранее перечисленных версий python. 
-При этом различие версий не играет никакой роли. (С помощью python версии 3. 4. можно декомпилировать программу, написанную на python 3. 6.).
+- Added a banner that appears during the decompilation process
+
+
+**Note:**
+
+- If you cannot decompile one of the libraries from the **EXE2PY_Pycache** folder, check the "decompile all additional libraries" checkbox and try again.
+
+- The program can work on python versions 3.4, 3.6, 3.7. 3.8
+
+
+- With its help, it is possible to decompile programs of the above mentioned python versions. 
+At the same time, the difference in versions does not matter. (With python version 3.4., you can decompile a program written in python 3.6.).
+
 
 <hr>
 
-*Скриншот работающего приложения*
+*Screenshot of the running application*
 
 
 ![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/Working.PNG)
+
+
+# Upgrade pip:
+
+`python -m pip install --upgrade pip`
+
+# Install requirements:
+
+`python -m pip install -r requirements.txt`
+
+# Usage:
+
+`python main.py`

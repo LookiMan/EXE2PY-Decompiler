@@ -41,10 +41,6 @@ class Platforms(Enum):
     WINDOWS = 'Windows'
 
 
-def _generate_pyc_header(python_version, size) -> bytes:
-    return b''
-
-
 def search_pyc_files(directory: str) -> list:
     return glob.glob('%s\\*.pyc' % directory)
 

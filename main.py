@@ -1,24 +1,25 @@
 ﻿import sys
 
 from argparse import ArgumentParser
+from io import BytesIO
 from os import listdir
 from os import rename
 from os import path
 from platform import system
 
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QMessageBox
 
 from config import EXTRACTED_DIR
+from config import EXTRACTING_LOG
 from config import LOG_FILE
 from config import LOG_LEVEL
 from config import MODULES_DIR
 from config import MAIN_DIR
 from config import PYCACHE_DIR
 
-from ui import show_error
 from ui import MainWindow
 
-from utils import _generate_pyc_header
 from utils import make_folders
 from utils import open_output_folder
 from utils import search_pyc_files
@@ -49,7 +50,7 @@ except ImportError as e:
 
 
 class StreamBuffer:
-    """Класс имитирующий sys.stdout для для перехвата данных"""
+    """Class mimicking sys.stdout to capture data"""
 
     def __init__(self) -> None:
         self.stream = None
@@ -67,10 +68,11 @@ class StreamBuffer:
         self.lines.append(line)
 
     def flush(self) -> None:
+        """ Stub """
         pass
 
     def dump_logs(self, filename: str) -> None:
-        with open(filename, mode='w') as file:
+        with open(filename, mode='a') as file:
             file.write(''.join(self.lines))
         self.lines = list()
 
@@ -79,9 +81,9 @@ class StreamBuffer:
 
 
 class HeaderCorrectorMainFiles:
-    """Класс для подбора заголовка для .pyc файла"""
-    filename = None
-    filedata = b''
+    """Class for picking a header for a .pyc file"""
+    filename: str
+    filedata: bytes
 
     def set_file(self, filename: str) -> None:
         self.filename = filename
@@ -100,8 +102,15 @@ class HeaderCorrectorMainFiles:
 
 
 class HeaderCorrectorSubLibraries(HeaderCorrectorMainFiles):
-    """Класс для коррекции заголовка кэш-файла для версий python 3.7, 3.8"""
-    header = b'\x00\x00\x00\x00'
+    """Class for cache file header correction for python versions 3.7, 3.8"""
+    header: bytes = b'\x00\x00\x00\x00'
+    filedata: BytesIO
+
+    def set_file(self, filename: str) -> None:
+        self.filename = filename
+
+        with open(self.filename, mode='rb') as file:
+            self.filedata = BytesIO(file.read())
 
     def is_need_correct(self) -> bool:
         with open(self.filename, mode='rb') as file:
@@ -139,18 +148,18 @@ def decompile_pyc_file(filename: str, output_directory: str) -> int:
         uncompile.main_bin()
 
     stream_buffer.release_stream()
-    stream_buffer.dump_logs(path.join(output_directory, 'output.log'))
+    stream_buffer.dump_logs(path.join(output_directory, EXTRACTING_LOG))
 
     return 201
 
 
-def decompile_pyc_files(filenames: list, output_directory: str):
+def decompile_pyc_files(filenames: list, *, output_directory: str):
     for filename in filenames:
         decompile_pyc_file(filename, output_directory)
     return 203
 
 
-def decompile_sublibrary(filename: str, output_directory: str):
+def decompile_sublibrary(filename: str, *, output_directory: str):
     corrector = HeaderCorrectorSubLibraries()
     corrector.set_file(filename)
 
@@ -162,23 +171,25 @@ def decompile_sublibrary(filename: str, output_directory: str):
     try:
         uncompile.main_bin()
     except Exception:
-        """Для python версии 3.6 заголовок файла на 4 байта короче, и поэтому сначала пытаемся декомпилировать байт-код без изменений,
-        в случае возникновении ошибки, в заголовок файла дописывается 4 байта, для нормальной декомпиляции кэш-файлов версий 3.7, 3.8"""
+        # For python version 3.6, the file header is 4 bytes shorter,
+        # so we first try to decompile the bytecode without changes,
+        # if an error occurs, 4 bytes are added to the file header
+        # to allow normal decompilation of cache files for versions 3.7, 3.8.
         corrector.correct_file()
         uncompile.main_bin()
 
     stream_buffer.release_stream()
-    stream_buffer.dump_logs(path.join(output_directory, 'output.log'))
+    stream_buffer.dump_logs(path.join(output_directory, EXTRACTING_LOG))
     return 202
 
 
-def decompile_sublibraries(filenames: list, output_directory: str):
+def decompile_sublibraries(filenames: list, *, output_directory: str):
     for filename in filenames:
-        decompile_sublibrary(filename, output_directory)
+        decompile_sublibrary(filename, output_directory=output_directory)
     return 204
 
 
-def decompile_with_pyinstxtractor(filename: str, is_need_decompile_sub_libraries: bool):
+def decompile_with_pyinstxtractor(filename: str, *, is_need_decompile_sub_libraries: bool):
     current_directory = path.dirname(filename)
     extract_directory = path.join(current_directory, EXTRACTED_DIR)
     modules_directory = path.join(current_directory, MODULES_DIR)
@@ -192,9 +203,9 @@ def decompile_with_pyinstxtractor(filename: str, is_need_decompile_sub_libraries
         scripts_directory,
     ])
 
-    # Передача pyinstxtractor'у пути для сохранения кэша модулей
+    # Passing to pyinstxtractor the path to save the module cache
     pyinstxtractor.CACHE_DIRECTORY = cache_directory
-    # Передача pyinstxtractor'у пути для сохранения содержимого .ехе файла
+    # Passing to pyinstxtractor the path to save the contents of the .exe file
     pyinstxtractor.EXTRACTION_DIR = extract_directory
 
     if (len(sys.argv)) > 1:
@@ -206,10 +217,10 @@ def decompile_with_pyinstxtractor(filename: str, is_need_decompile_sub_libraries
     stream_buffer.intercept_stream(sys.stdout)
 
     pyinstxtractor.main()
-    # Получение списка возможных основных файлов
+    # Getting a list of possible main files
     files = pyinstxtractor.MAIN_FILES
 
-    # Эти библиотеки всегда в списке основных библиотек, но не относятся к ним
+    # These libraries are always on the list of core libraries, but are not related to them
     if 'pyi_rth_multiprocessing' in files:
         files.remove('pyi_rth_multiprocessing')
     if 'pyiboot01_bootstrap' in files:
@@ -229,130 +240,119 @@ def decompile_with_pyinstxtractor(filename: str, is_need_decompile_sub_libraries
     main_files = [filename + '.pyc' for filename in main_files]
 
     stream_buffer.release_stream()
-    stream_buffer.dump_logs(path.join(scripts_directory, 'output.log'))
+    stream_buffer.dump_logs(path.join(scripts_directory, EXTRACTING_LOG))
 
-    decompile_pyc_files(main_files, scripts_directory)
+    try:
+        decompile_pyc_files(main_files, output_directory=scripts_directory)
+    except Exception as e:
+        log.exception(e)
+        return 501
 
-    if is_need_decompile_sub_libraries is True:
+    if is_need_decompile_sub_libraries:
         cache_files = [
             path.join(cache_directory, file) for file in listdir(cache_directory)
         ]
 
-        decompile_sublibraries(cache_files, modules_directory)
+        try:
+            decompile_sublibraries(
+                cache_files,
+                output_directory=modules_directory
+            )
+        except Exception as e:
+            log.exception(e)
+            return 501
+    return 200
 
 
-def decompile_with_unpy2exe(filename: str):
+def decompile_with_unpy2exe(filename: str) -> int:
     current_directory = path.dirname(filename)
     extract_directory = path.join(current_directory, EXTRACTED_DIR)
     scripts_directory = path.join(current_directory, MAIN_DIR)
 
     if system() == Platforms.WINDOWS:
-        # В названии присутствуют запрещенные символы символы  для windows '<, >'
+        # The name contains forbidden symbols symbols for windows '<', '>'
         unpy2exe.IGNORE.append('<boot hacks>.pyc')
 
-    # Делаем заглушку, поскольку с заголовками от функции unpy2exe._generate_pyc_header байт-код не компилируется в чистый код
-    unpy2exe._generate_pyc_header = _generate_pyc_header
+    # Set a stub, because with the function headers
+    # unpy2exe._generate_pyc_header bytecode is not compiled into source code
+    unpy2exe._generate_pyc_header = lambda python_version, size: b''
     unpy2exe.unpy2exe(filename, f'{sys.version_info[:2]}.{extract_directory}')
 
-    decompile_pyc_files(search_pyc_files(extract_directory), scripts_directory)
+    return decompile_pyc_files(
+        search_pyc_files(extract_directory), 
+        output_directory=scripts_directory,
+    )
 
 
-def decompile_python_cache_file(filename: str) -> int:
-    output_directory = path.dirname(filename)
-
+def decompile_executable(filename: str, *, is_need_decompile_sub_libraries: bool) -> int:
     try:
-        status_code = decompile_pyc_file(filename, output_directory)
-    except Exception:
-        status_code = 501
-    finally:
-        return status_code
-
-
-def decompile_python_cache_files(filenames: list) -> int:
-    output_directory = path.dirname(filenames[0])
-
-    try:
-        status_code = decompile_pyc_files(filenames, output_directory)
-    except Exception:
-        status_code = 501
-    finally:
-        return status_code
-
-
-def decompile_python_sublibrary(filename: str):
-    output_directory = path.dirname(filename)
-
-    try:
-        status_code = decompile_sublibrary(filename, output_directory)
-    except Exception as e:
+        return decompile_with_pyinstxtractor(
+            filename,
+            is_need_decompile_sub_libraries=is_need_decompile_sub_libraries,
+        )
+    except (ValueError, TypeError, ImportError, FileNotFoundError, PermissionError) as e:
         log.exception(e)
-        status_code = 503
-    finally:
-        return status_code
-
-
-def decompile_python_sublibraries(filenames: list):
-    output_directory = path.dirname(filenames[0])
-
-    try:
-        status_code = decompile_sublibraries(filenames, output_directory)
-    except Exception as e:
-        log.exception(e)
-        status_code = 503
-    finally:
-        return status_code
-
-
-def decompile_executable(filename: str, is_need_decompile_sub_libraries: bool):
-    """Главная функция для декомпиляции .exe файлов"""
-    try:
-        decompile_with_pyinstxtractor(filename, is_need_decompile_sub_libraries)
-    except Exception:
-        """Выбросит данное исключение в случае, если программа скомпилирована не с помощью pyinstaller"""
-        decompile_with_unpy2exe(filename)
-    except (ValueError, TypeError, ImportError, FileNotFoundError, PermissionError):
         return 500
-    else:
-        return 200
+    except Exception:
+        # Raise this exception if the program is not compiled with pyinstaller
+        return decompile_with_unpy2exe(filename)
 
 
 def start_decompile(
     filename: str,
+    *,
     is_need_decompile_sub_libraries: bool,
     is_need_open_output_folder: bool,
-) -> None:
+) -> int:
+
+    status_code = -1
 
     if filename.endswith('.pyc'):
-        if not is_need_decompile_sub_libraries:
-            status_code = decompile_python_cache_file(filename)
+        output_directory = path.dirname(filename)
 
         if is_need_decompile_sub_libraries:
-            status_code = decompile_python_sublibrary(filename)
+            status_code = decompile_sublibrary(
+                filename,
+                output_directory=output_directory,
+            )
+
+        else:
+            status_code = decompile_pyc_file(
+                filename,
+                output_directory=output_directory,
+            )
 
         if is_need_open_output_folder:
-            current_directory = path.dirname(filename)
-            open_output_folder(current_directory)
+            open_output_folder(output_directory)
 
     elif filename.endswith('.exe'):
-        status_code = decompile_executable(filename, is_need_decompile_sub_libraries)
+        status_code = decompile_executable(
+            filename,
+            is_need_decompile_sub_libraries=is_need_decompile_sub_libraries
+        )
 
         if is_need_open_output_folder:
-            current_directory = path.dirname(filename)
-            scripts_directory = path.join(current_directory, MAIN_DIR)
-            open_output_folder(scripts_directory)
+            open_output_folder(
+                path.join(path.dirname(filename), MAIN_DIR)
+            )
 
     elif path.isdir(filename):
         filenames = search_pyc_files(filename)
-
-        if not is_need_decompile_sub_libraries:
-            status_code = decompile_python_cache_files(filenames)
+        output_directory = filename
 
         if is_need_decompile_sub_libraries:
-            status_code = decompile_python_sublibraries(filenames)
+            status_code = decompile_sublibraries(
+                filenames,
+                output_directory=output_directory
+            )
+        else:
+            status_code = decompile_pyc_files(
+                filenames,
+                output_directory=output_directory,
+            )
 
         if is_need_open_output_folder:
-            current_directory = path.dirname(filename)
-            open_output_folder(current_directory)
+            open_output_folder(output_directory)
 
     elif not filename.endswith('.exe') and not filename.endswith('.pyc'):
         status_code = 400
@@ -366,11 +366,15 @@ def start_decompile(
 def main() -> None:
     app = QApplication(sys.argv)
 
-    if len(import_errors) > 0:
-        show_error('Критическая ошибка', '\n'.join(import_errors))
+    widget = MainWindow(start_decompile)
 
-    widget = MainWindow()
-    widget.worker = start_decompile
+    if import_errors:
+        QMessageBox.critical(
+            widget.form,
+            'Critical error',
+            '\n'.join(import_errors),
+            QMessageBox.Ok,
+        )
 
     parser = ArgumentParser()
     parser.add_argument('-t', '--target', help='File or directory to decompile')

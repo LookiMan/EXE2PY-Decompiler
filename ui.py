@@ -1,8 +1,16 @@
 from os.path import join
 from platform import system
+from pyautogui import Size
 
 from PyQt5 import QtCore
 from PyQt5 import QtGui
+from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QEvent
+from PyQt5.QtGui import QDragEnterEvent
+from PyQt5.QtGui import QDropEvent
+from PyQt5.QtGui import QMovie
+from PyQt5.QtGui import QMouseEvent
+from PyQt5.QtGui import QEnterEvent
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QLabel
@@ -17,18 +25,6 @@ from utils import STATUS_CODES
 from toggle import AnimatedToggle
 
 
-def show_info(title: str, message_text: str) -> None:
-    QMessageBox.information(None, title, message_text, QMessageBox.Ok)
-
-
-def show_warning(title: str, message_text: str) -> None:
-    QMessageBox.warning(None, title, message_text, QMessageBox.Ok)
-
-
-def show_error(title: str, message_text: str) -> None:
-    QMessageBox.critical(None, title, message_text, QMessageBox.Ok)
-
-
 class GifPlayer(QtCore.QObject):
     def __init__(self, widget) -> None:
         super().__init__()
@@ -40,7 +36,7 @@ class GifPlayer(QtCore.QObject):
         self.banner.setStyleSheet('background-color: rgba(195, 195, 195, 100);')
         self.movie_screen = QLabel(self.central_widget)
         self.movie_screen.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.movie_screen.setAlignment(QtCore.Qt.AlignCenter)
+        self.movie_screen.setAlignment(Qt.AlignCenter)
         self.movie_screen.setScaledContents(True)
         self.movie_screen.setGeometry(
             QtCore.QRect(
@@ -50,8 +46,8 @@ class GifPlayer(QtCore.QObject):
                 124,
             )
         )
-        self.movie = QtGui.QMovie(join('images', 'preloader.gif'))
-        self.movie.setCacheMode(QtGui.QMovie.CacheAll)
+        self.movie = QMovie(join('images', 'preloader.gif'))
+        self.movie.setCacheMode(QMovie.CacheAll)
         self.movie_screen.setMovie(self.movie)
         self.movie_screen.hide()
         self.banner.hide()
@@ -70,14 +66,14 @@ class GifPlayer(QtCore.QObject):
 class Thread(QtCore.QThread):
     callback = QtCore.pyqtSignal(int)
 
-    def __init__(self, function, *args) -> None:
+    def __init__(self, function, **kwargs) -> None:
         super().__init__()
         self.is_running = True
         self.function = function
-        self.args = args
+        self.kwargs = kwargs
 
     def run(self) -> None:
-        self.callback.emit(self.function(*self.args))
+        self.callback.emit(self.function(**self.kwargs))
 
 
 class DraggableLineEdit(QLineEdit):
@@ -86,47 +82,42 @@ class DraggableLineEdit(QLineEdit):
 
         self.setAcceptDrops(True)
 
-    def dragEnterEvent(self, e) -> None:
-        if e.mimeData().hasFormat('text/plain'):
-            e.accept()
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasFormat('text/plain'):
+            event.accept()
 
-        elif e.mimeData().hasFormat('text/uri-list'):
-            e.accept()
+        elif event.mimeData().hasFormat('text/uri-list'):
+            event.accept()
 
         else:
-            e.ignore()
+            event.ignore()
 
-    def dropEvent(self, e) -> None:
-        path = e.mimeData().text()
-
-        if path.startswith('file:///'):
-            path = path[8:]
-
-        self.setText(path)
+    def dropEvent(self, event: QDropEvent) -> None:
+        self.setText(event.mimeData().text().replace('file:///', ''))
 
 
 class ClickedQLabel(QLabel):
     clicked = QtCore.pyqtSignal()
 
-    def mouseReleaseEvent(self, event) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         self.clicked.emit()
         super().mouseReleaseEvent(event)
 
 
 class BaseMoveEvents(QWidget):
-    def _get_window(self):
+    def _get_window(self) -> QWidget:
         return self._parent.window()
 
-    def _get_window_width(self):
+    def _get_window_width(self) -> int:
         return self._parent.window().geometry().width()
 
-    def _get_window_height(self):
+    def _get_window_height(self) -> int:
         return self._parent.window().geometry().height()
 
-    def _get_screen_size(self):
+    def _get_screen_size(self) -> Size:
         return get_screen_size()
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
         win = self._get_window()
         screensize = self._get_screen_size()
 
@@ -145,8 +136,8 @@ class BaseMoveEvents(QWidget):
 
         super().mouseMoveEvent(event)
 
-    def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.LeftButton:
             win = self._get_window()
             x_korr = win.frameGeometry().x() - win.geometry().x()
             y_korr = win.frameGeometry().y() - win.geometry().y()
@@ -167,21 +158,16 @@ class BaseMoveEvents(QWidget):
         else:
             self.__dict__.update({'b_move': False})
 
-        self.setCursor(QtCore.Qt.SizeAllCursor)
+        self.setCursor(Qt.SizeAllCursor)
         super().mousePressEvent(event)
 
-    def mouseReleaseEvent(self, event):
-        if hasattr(self, 'x_korr') and hasattr(self, 'y_korr'):
-            self.__dict__.update({'b_move': False})
-            x = event.globalX() + self.x_korr - self.lastPoint.x()
-            y = event.globalY() + self.y_korr - self.lastPoint.y()
-
-        self.setCursor(QtCore.Qt.ArrowCursor)
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        self.setCursor(Qt.ArrowCursor)
         super().mouseReleaseEvent(event)
 
 
 class Panel(QLabel, BaseMoveEvents):
-    def __init__(self, parent, width: int, height: int) -> None:
+    def __init__(self, parent: QWidget, width: int, height: int) -> None:
         super(QLabel, self).__init__(parent)
         self._parent = parent
         self._width = width
@@ -194,7 +180,7 @@ class Panel(QLabel, BaseMoveEvents):
 
 
 class Title(QLabel, BaseMoveEvents):
-    def __init__(self, parent, width: int, height: int) -> None:
+    def __init__(self, parent: QWidget, width: int, height: int) -> None:
         super(QLabel, self).__init__(parent)
         self._parent = parent
         self._width = width
@@ -218,17 +204,17 @@ class Title(QLabel, BaseMoveEvents):
 
 
 class BaseButtonEvents(QWidget):
-    def enterEvent(self, event):
+    def enterEvent(self, event: QEnterEvent) -> None:
         self.setPixmap(self.pixmap_enter)
         super().enterEvent(event)
 
-    def leaveEvent(self, event):
+    def leaveEvent(self, event: QEvent) -> None:
         self.setPixmap(self.pixmap_leave)
         super().leaveEvent(event)
 
 
 class HideButton(ClickedQLabel, BaseButtonEvents):
-    def __init__(self, parent, x, y, size=26) -> None:
+    def __init__(self, parent: QWidget, x: int, y: int, size: int = 26) -> None:
         super(QLabel, self).__init__(parent)
         self.pixmap = QtGui.QPixmap('images/hide.png')
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
@@ -241,7 +227,7 @@ class HideButton(ClickedQLabel, BaseButtonEvents):
 
 
 class CloseButton(ClickedQLabel, BaseButtonEvents):
-    def __init__(self, parent, x, y, size=26) -> None:
+    def __init__(self, parent: QWidget, x: int, y: int, size: int = 26) -> None:
         super(QLabel, self).__init__(parent)
         self.pixmap = QtGui.QPixmap('images/close.png')
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
@@ -254,7 +240,7 @@ class CloseButton(ClickedQLabel, BaseButtonEvents):
 
 
 class Header:
-    def __init__(self, parent) -> None:
+    def __init__(self, parent: QWidget) -> None:
         self._height = 26
         self.panel = Panel(parent, parent.width(), self._height)
         self.title = Title(parent, parent.width() * 0.8, self._height)
@@ -275,11 +261,11 @@ class Header:
 class BaseForm(QtCore.QObject):
     closeHandler = QtCore.pyqtSignal(dict)
 
-    def _customize_window(self):
+    def _customize_window(self) -> None:
         '''Создание кастомного окна'''
 
         # Убираем стандартную рамку
-        self.form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        self.form.setWindowFlags(Qt.FramelessWindowHint)
         # Установка иконки
         icon = QtGui.QIcon()
         icon.addPixmap(
@@ -291,38 +277,48 @@ class BaseForm(QtCore.QObject):
         self.header.hide_button.clicked.connect(self.minimize)
         self.header.close_button.clicked.connect(self.closeEvent)
 
-    def closeEvent(self):
+    def closeEvent(self) -> None:
         self.close()
 
-    def show(self):
+    def show(self) -> None:
         self.form.show()
 
-    def hide(self):
+    def hide(self) -> None:
         self.form.hide()
 
-    def minimize(self):
+    def minimize(self) -> None:
         self.form.showMinimized()
 
-    def close(self):
+    def close(self) -> None:
         # Если есть дочернее окно, закроет его
         if hasattr(self, 'child_form'):
             self.child_form.close()
 
         self.form.close()
 
-    def set_title(self, title):
+    def set_title(self, title: str) -> None:
         self.header.title.set_title(title)
 
-    def get_title(self):
+    def get_title(self) -> str:
         return self.header.title.get_title()
 
-    def set_background_image(self, path):
+    def set_background_image(self, path: str) -> None:
         self.background.set_image(path)
+
+    def show_info(self, title: str, message_text: str) -> None:
+        QMessageBox.information(self.form, title, message_text, QMessageBox.Ok)
+
+    def show_warning(self, title: str, message_text: str) -> None:
+        QMessageBox.warning(self.form, title, message_text, QMessageBox.Ok)
+
+    def show_error(self, title: str, message_text: str) -> None:
+        QMessageBox.critical(self.form, title, message_text, QMessageBox.Ok)
 
 
 class MainWindow(BaseForm):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, worker: callable, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.worker = worker
         self.form = QWidget()
         self.form.setObjectName('MainWindow')
         self.form.setFixedSize(644, 175)
@@ -450,9 +446,9 @@ class MainWindow(BaseForm):
 
         self.thread = Thread(
             self.worker,
-            self.lineEdit.text().strip(),
-            self.checkbox.isChecked(),
-            self.checkbox_2.isChecked(),
+            filename=self.lineEdit.text().strip(),
+            is_need_decompile_sub_libraries=self.checkbox.isChecked(),
+            is_need_open_output_folder=self.checkbox_2.isChecked(),
         )
 
         self.thread.callback.connect(self.stop_processing)
@@ -465,18 +461,18 @@ class MainWindow(BaseForm):
 
         if status_code in range(200, 300):
             message = STATUS_CODES[status_code]
-            show_info('Успех', message)
+            self.show_info('Успех', message)
 
         elif status_code in range(400, 500):
             message = STATUS_CODES[status_code]
-            show_warning('Внимание', message)
+            self.show_warning('Внимание', message)
 
         elif status_code in range(500, 600):
             message = STATUS_CODES[status_code]
-            show_error('Критическая ошибка', message)
+            self.show_error('Критическая ошибка', message)
 
         else:
-            show_error(
+            self.show_error(
                 'Критическая ошибка', 'Непредвиденный статус код: %s' % str(status_code)
             )
 

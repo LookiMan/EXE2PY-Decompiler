@@ -1,20 +1,5 @@
 .vscode/
 
-Logs/
-
-logs.txt
-
-chat/migrations/*
-!chat/migrations/__init__.py
-
-chat/photos/*
-!chat/photos/default/
-
-telegram_bot/migrations/*
-!telegram_bot/migrations/__init__.py
-
-google_drive_API/json/
-
 # Linux template
 *~
 # KDE directory preferences

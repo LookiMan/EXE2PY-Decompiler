@@ -8,7 +8,7 @@ It is also possible to decompile individual cache files back into the original p
 
 *Screenshot of the main application window*
 
-![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/MainForm.PNG)
+![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/main_window.PNG)
 
 
 **What's new:**
@@ -47,7 +47,7 @@ At the same time, the difference in versions does not matter. (With python versi
 *Screenshot of the running application*
 
 
-![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/Working.PNG)
+![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/working.PNG)
 
 
 # Upgrade pip:
@@ -61,3 +61,7 @@ At the same time, the difference in versions does not matter. (With python versi
 # Usage:
 
 `python main.py`
+
+# Validate:
+
+`pyright filename.py`

@@ -66,16 +66,12 @@ class AnimatedToggle(QCheckBox):
         return self.contentsRect().contains(pos)
 
     @pyqtSlot(int)
-    def setup_animation(self, value) -> None:
+    def setup_animation(self, value: int) -> None:
         self.animations_group.stop()
-        # HERE
-        if value:
-            self.animation.setEndValue(1)
-        else:
-            self.animation.setEndValue(0)
+        self.animation.setEndValue(bool(value))
         self.animations_group.start()
 
-    def paintEvent(self, e: QPaintEvent) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         contRect = self.contentsRect()
         handleRadius = round(0.24 * contRect.height())
 
@@ -123,7 +119,7 @@ class AnimatedToggle(QCheckBox):
         return self._handle_position
 
     @handle_position.setter
-    def handle_position(self, pos) -> None:
+    def handle_position(self, pos: float) -> None:
         self._handle_position = pos
         self.update()
 
@@ -132,6 +128,6 @@ class AnimatedToggle(QCheckBox):
         return self._pulse_radius
 
     @pulse_radius.setter
-    def pulse_radius(self, pos) -> None:
+    def pulse_radius(self, pos: float) -> None:
         self._pulse_radius = pos
         self.update()

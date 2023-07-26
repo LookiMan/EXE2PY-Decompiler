@@ -307,6 +307,9 @@ def start_decompile(
 
     status_code = -1
 
+    if not path.exists(filename):
+        return 400
+
     if filename.endswith('.pyc'):
         output_directory = path.dirname(filename)
 

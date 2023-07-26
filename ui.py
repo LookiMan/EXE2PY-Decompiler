@@ -1,41 +1,43 @@
-# -*- coding: UTF-8 -*-
-from PyQt5.QtWidgets import QWidget, QFileDialog
-from PyQt5.QtWidgets import QMessageBox, QLabel, QLineEdit, QSizePolicy
-from PyQt5 import QtCore, QtGui
+from os.path import join
+from platform import system
 
-import utils
-import toggleButton
+from PyQt5 import QtCore
+from PyQt5 import QtGui
+from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLineEdit
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QSizePolicy
+
+from utils import get_screen_size
+from utils import Platforms
+from utils import STATUS_CODES
+
+from toggle import AnimatedToggle
 
 
-def show_info(title: str, message_text: str):
+def show_info(title: str, message_text: str) -> None:
     QMessageBox.information(None, title, message_text, QMessageBox.Ok)
 
 
-def show_warning(title: str, message_text: str):
+def show_warning(title: str, message_text: str) -> None:
     QMessageBox.warning(None, title, message_text, QMessageBox.Ok)
 
 
-def show_error(title: str, message_text: str):
+def show_error(title: str, message_text: str) -> None:
     QMessageBox.critical(None, title, message_text, QMessageBox.Ok)
 
 
-def file_dialog():
-    dlg = QFileDialog()
-    dlg.setFileMode(QFileDialog.AnyFile)
-
-    if dlg.exec_():
-        return dlg.selectedFiles()
-
-
 class GifPlayer(QtCore.QObject):
-    def __init__(self, widget):
+    def __init__(self, widget) -> None:
         super().__init__()
         self.central_widget = widget
         self.banner = QLabel(self.central_widget)
         self.banner.setGeometry(
             0, 26, self.central_widget.width(), self.central_widget.height()
         )
-        self.banner.setStyleSheet("background-color: rgba(195, 195, 195, 100);")
+        self.banner.setStyleSheet('background-color: rgba(195, 195, 195, 100);')
         self.movie_screen = QLabel(self.central_widget)
         self.movie_screen.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.movie_screen.setAlignment(QtCore.Qt.AlignCenter)
@@ -48,18 +50,18 @@ class GifPlayer(QtCore.QObject):
                 124,
             )
         )
-        self.movie = QtGui.QMovie("images\\preloader.gif")
+        self.movie = QtGui.QMovie(join('images', 'preloader.gif'))
         self.movie.setCacheMode(QtGui.QMovie.CacheAll)
         self.movie_screen.setMovie(self.movie)
         self.movie_screen.hide()
         self.banner.hide()
 
-    def start_animation(self):
+    def start_animation(self) -> None:
         self.movie.start()
         self.banner.show()
         self.movie_screen.show()
 
-    def stop_animation(self):
+    def stop_animation(self) -> None:
         self.movie.stop()
         self.banner.hide()
         self.movie_screen.hide()
@@ -68,54 +70,50 @@ class GifPlayer(QtCore.QObject):
 class Thread(QtCore.QThread):
     callback = QtCore.pyqtSignal(int)
 
-    def __init__(self, function, *args):
+    def __init__(self, function, *args) -> None:
         super().__init__()
         self.is_running = True
         self.function = function
         self.args = args
 
-    def run(self):
+    def run(self) -> None:
         self.callback.emit(self.function(*self.args))
 
 
 class DraggableLineEdit(QLineEdit):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.setAcceptDrops(True)
 
-    def dragEnterEvent(self, e):
-        if e.mimeData().hasFormat("text/plain"):
+    def dragEnterEvent(self, e) -> None:
+        if e.mimeData().hasFormat('text/plain'):
             e.accept()
 
-        elif e.mimeData().hasFormat("text/uri-list"):
+        elif e.mimeData().hasFormat('text/uri-list'):
             e.accept()
 
         else:
             e.ignore()
 
-    def dropEvent(self, e):
+    def dropEvent(self, e) -> None:
         path = e.mimeData().text()
 
-        if path.startswith("file:///"):
+        if path.startswith('file:///'):
             path = path[8:]
 
         self.setText(path)
 
 
 class ClickedQLabel(QLabel):
-    """Класс добавляющий событие клика базовому классу QLabel"""
-
     clicked = QtCore.pyqtSignal()
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, event) -> None:
         self.clicked.emit()
         super().mouseReleaseEvent(event)
 
 
 class BaseMoveEvents(QWidget):
-    """Реализация базовых методов для шапки приложения"""
-
     def _get_window(self):
         return self._parent.window()
 
@@ -126,7 +124,7 @@ class BaseMoveEvents(QWidget):
         return self._parent.window().geometry().height()
 
     def _get_screen_size(self):
-        return (utils.get_screen_width(), utils.get_screen_height())
+        return get_screen_size()
 
     def mouseMoveEvent(self, event):
         win = self._get_window()
@@ -160,21 +158,21 @@ class BaseMoveEvents(QWidget):
 
             self.__dict__.update(
                 {
-                    "lastPoint": event.pos(),
-                    "b_move": True,
-                    "x_korr": x_korr,
-                    "y_korr": y_korr,
+                    'lastPoint': event.pos(),
+                    'b_move': True,
+                    'x_korr': x_korr,
+                    'y_korr': y_korr,
                 }
             )
         else:
-            self.__dict__.update({"b_move": False})
+            self.__dict__.update({'b_move': False})
 
         self.setCursor(QtCore.Qt.SizeAllCursor)
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if hasattr(self, "x_korr") and hasattr(self, "y_korr"):
-            self.__dict__.update({"b_move": False})
+        if hasattr(self, 'x_korr') and hasattr(self, 'y_korr'):
+            self.__dict__.update({'b_move': False})
             x = event.globalX() + self.x_korr - self.lastPoint.x()
             y = event.globalY() + self.y_korr - self.lastPoint.y()
 
@@ -183,49 +181,43 @@ class BaseMoveEvents(QWidget):
 
 
 class Panel(QLabel, BaseMoveEvents):
-    """Панель заголовка окна приложения"""
-
-    def __init__(self, parent, width: int, height: int):
+    def __init__(self, parent, width: int, height: int) -> None:
         super(QLabel, self).__init__(parent)
         self._parent = parent
         self._width = width
         self._height = height
         self.setGeometry(QtCore.QRect(0, 0, self._width, self._height))
-        self._pixmap = QtGui.QPixmap("images\\header.png")
+        self._pixmap = QtGui.QPixmap(join('images', 'header.png'))
         self.setScaledContents(True)
         self.setPixmap(self._pixmap)
-        self.setObjectName("header")
+        self.setObjectName('header')
 
 
 class Title(QLabel, BaseMoveEvents):
-    """Заголовок окна приложения"""
-
-    def __init__(self, parent, width: int, height: int):
+    def __init__(self, parent, width: int, height: int) -> None:
         super(QLabel, self).__init__(parent)
         self._parent = parent
         self._width = width
         self._height = height
         self.font = QtGui.QFont()
-        self.font.setFamily("Segoe UI Semibold")
+        self.font.setFamily('Segoe UI Semibold')
         self.font.setPointSize(8)
         self.font.setWeight(75)
         self.font.setBold(True)
-        self.setStyleSheet("color: rgb(255,255,255);")
+        self.setStyleSheet('color: rgb(255,255,255);')
         self.setFont(self.font)
         self.setGeometry(QtCore.QRect(10, 0, self._width, self._height))
-        self.setText("Заголовок")
-        self.setObjectName("titleLabel")
+        self.setText('Заголовок')
+        self.setObjectName('titleLabel')
 
-    def set_title(self, title):
+    def set_title(self, title: str) -> None:
         self.setText(title)
 
-    def get_title(self):
+    def get_title(self) -> str:
         return self.text()
 
 
 class BaseButtonEvents(QWidget):
-    """Общие методы для реализации ховер еффекта"""
-
     def enterEvent(self, event):
         self.setPixmap(self.pixmap_enter)
         super().enterEvent(event)
@@ -236,39 +228,33 @@ class BaseButtonEvents(QWidget):
 
 
 class HideButton(ClickedQLabel, BaseButtonEvents):
-    """Кнопка сворачивания приложения"""
-
-    def __init__(self, parent, x, y, size=26):
+    def __init__(self, parent, x, y, size=26) -> None:
         super(QLabel, self).__init__(parent)
-        self.pixmap = QtGui.QPixmap("images/hide.png")
+        self.pixmap = QtGui.QPixmap('images/hide.png')
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
         self.pixmap_enter = self.pixmap.copy(size, 0, size * 2, size)
 
         self.setGeometry(QtCore.QRect(x, y, size, size))
         self.setPixmap(self.pixmap_leave)
-        self.setObjectName("minimize_button")
-        self.setToolTip("Свернуть")
+        self.setObjectName('minimize_button')
+        self.setToolTip('Свернуть')
 
 
 class CloseButton(ClickedQLabel, BaseButtonEvents):
-    """Кнопка закрытия приложения"""
-
-    def __init__(self, parent, x, y, size=26):
+    def __init__(self, parent, x, y, size=26) -> None:
         super(QLabel, self).__init__(parent)
-        self.pixmap = QtGui.QPixmap("images/close.png")
+        self.pixmap = QtGui.QPixmap('images/close.png')
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
         self.pixmap_enter = self.pixmap.copy(size, 0, size * 2, size)
 
         self.setGeometry(QtCore.QRect(x, y, size, size))
         self.setPixmap(self.pixmap_leave)
-        self.setObjectName("close_button")
-        self.setToolTip("Закрыть")
+        self.setObjectName('close_button')
+        self.setToolTip('Закрыть')
 
 
-class Header(object):
-    """Шапка приложения с заголовком и кнопками закрытия и сворачивания"""
-
-    def __init__(self, parent):
+class Header:
+    def __init__(self, parent) -> None:
         self._height = 26
         self.panel = Panel(parent, parent.width(), self._height)
         self.title = Title(parent, parent.width() * 0.8, self._height)
@@ -279,26 +265,25 @@ class Header(object):
             parent, parent.width() - self._height, 0, self._height
         )
 
-    def width(self):
+    def width(self) -> int:
         return self._width
 
-    def height(self):
+    def height(self) -> int:
         return self._height
 
 
 class BaseForm(QtCore.QObject):
     closeHandler = QtCore.pyqtSignal(dict)
-    """ Вынесены общие методы для всех форм """
 
     def _customize_window(self):
-        """Создание кастомного окна"""
+        '''Создание кастомного окна'''
 
         # Убираем стандартную рамку
         self.form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
         # Установка иконки
         icon = QtGui.QIcon()
         icon.addPixmap(
-            QtGui.QPixmap("images/icon.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off
+            QtGui.QPixmap('images/icon.ico'), QtGui.QIcon.Normal, QtGui.QIcon.Off
         )
         self.form.setWindowIcon(icon)
 
@@ -307,170 +292,157 @@ class BaseForm(QtCore.QObject):
         self.header.close_button.clicked.connect(self.closeEvent)
 
     def closeEvent(self):
-        """
-        Базовый метод, вызывающийся при закрытии по нажатию на кастомный крестик.
-        """
         self.close()
 
     def show(self):
-        """Отображение формы"""
         self.form.show()
 
     def hide(self):
-        """Скрытие формы"""
         self.form.hide()
 
     def minimize(self):
-        """Сворачивает окно"""
         self.form.showMinimized()
 
     def close(self):
-        """Закрытие формы"""
-
         # Если есть дочернее окно, закроет его
-        if hasattr(self, "child_form"):
+        if hasattr(self, 'child_form'):
             self.child_form.close()
 
         self.form.close()
 
     def set_title(self, title):
-        """Метод для установки заголовка окна"""
         self.header.title.set_title(title)
 
     def get_title(self):
-        """Метод для получения заголовка окна"""
         return self.header.title.get_title()
 
     def set_background_image(self, path):
-        """Установка изображения на задний фон"""
         self.background.set_image(path)
 
 
 class MainWindow(BaseForm):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.form = QWidget()
-        self.form.setObjectName("MainWindow")
+        self.form.setObjectName('MainWindow')
         self.form.setFixedSize(644, 175)
         self.form.setStyleSheet(
-            "#MainWindow{background-color: #F2F2F2; border: 1 solid #000;}"
+            '#MainWindow{background-color: #F2F2F2; border: 1 solid #000;}'
         )
 
         self._customize_window()
 
-        self.header.title.set_title("Decompiller 3.0")
+        self.header.title.set_title('Decompiller 3.0')
 
         self.font = QtGui.QFont()
         self.font.setPointSize(10)
 
         self.label = QLabel(self.form)
-        self.label.setObjectName("label")
+        self.label.setObjectName('label')
         self.label.setGeometry(QtCore.QRect(12, 36, 601, 16))
-        self.label.setText("Введите путь к декомпилируемой программе или скрипту")
+        self.label.setText('Введите путь к декомпилируемой программе или скрипту')
         self.label.setFont(self.font)
 
         self.lineEdit = DraggableLineEdit(self.form)
-        self.lineEdit.setObjectName("lineEdit")
+        self.lineEdit.setObjectName('lineEdit')
         self.lineEdit.setGeometry(QtCore.QRect(10, 66, 560, 30))
         self.lineEdit.setStyleSheet(
-            "#lineEdit{"
-            "border: 1px solid #DDDDDD;"
-            "padding-left: 5px;"
-            "border-radius: 4px;"
-            "border-top-right-radius: 0px;"
-            "border-bottom-right-radius: 0px;"
-            "background-color: #fff;"
-            "}"
+            '#lineEdit{'
+            'border: 1px solid #DDDDDD;'
+            'padding-left: 5px;'
+            'border-radius: 4px;'
+            'border-top-right-radius: 0px;'
+            'border-bottom-right-radius: 0px;'
+            'background-color: #fff;'
+            '}'
         )
 
         self.file_search_button = ClickedQLabel(self.form)
-        self.file_search_button.setObjectName("file_search_button")
+        self.file_search_button.setObjectName('file_search_button')
         self.file_search_button.setGeometry(QtCore.QRect(570, 66, 60, 30))
         self.file_search_button.setFont(self.font)
-        self.file_search_button.setText("●●●")
+        self.file_search_button.setText('●●●')
         self.file_search_button.clicked.connect(self.select_file)
         self.file_search_button.setStyleSheet(
-            "#file_search_button{"
-            "border-bottom: 3px solid #080386;"
-            "border-radius: 4px;"
-            "border-top-left-radius: 0px;"
-            "border-bottom-left-radius: 0px;"
-            "qproperty-alignment: AlignCenter;"
-            "background-color: #240DC4;"
-            "color: #ffffff;"
-            "}\n"
-            "#file_search_button:hover{"
-            "background-color: #080386;"
-            "}"
+            '#file_search_button{'
+            'border-bottom: 3px solid #080386;'
+            'border-radius: 4px;'
+            'border-top-left-radius: 0px;'
+            'border-bottom-left-radius: 0px;'
+            'qproperty-alignment: AlignCenter;'
+            'background-color: #240DC4;'
+            'color: #ffffff;'
+            '}\n'
+            '#file_search_button:hover{'
+            'background-color: #080386;'
+            '}'
         )
 
         self.label_2 = QLabel(self.form)
-        self.label_2.setObjectName("label_2")
+        self.label_2.setObjectName('label_2')
         self.label_2.setGeometry(QtCore.QRect(14, 106, 320, 24))
-        self.label_2.setText("Декомпилировать все дополнительные библиотеки")
+        self.label_2.setText('Декомпилировать все дополнительные библиотеки')
         self.label_2.setFont(self.font)
 
-        self.checkbox = toggleButton.AnimatedToggle(self.form)
+        self.checkbox = AnimatedToggle(self.form)
         self.checkbox.move(340, 98)
         self.checkbox.setFixedSize(self.checkbox.sizeHint())
         self.checkbox.show()
 
         self.label_3 = QLabel(self.form)
-        self.label_3.setObjectName("label_2")
+        self.label_3.setObjectName('label_2')
         self.label_3.setGeometry(QtCore.QRect(14, 140, 320, 24))
-        self.label_3.setText("Автоматически открыть финальные папки")
+        self.label_3.setText('Автоматически открыть финальные папки')
         self.label_3.setFont(self.font)
 
-        self.checkbox_2 = toggleButton.AnimatedToggle(self.form)
+        self.checkbox_2 = AnimatedToggle(self.form)
         self.checkbox_2.move(340, 132)
         self.checkbox_2.setChecked(True)
 
         self.player = GifPlayer(self.form)
 
         self.start_button = ClickedQLabel(self.form)
-        self.start_button.setObjectName("start_button")
+        self.start_button.setObjectName('start_button')
         self.start_button.setGeometry(QtCore.QRect(490, 136, 140, 30))
         self.start_button.setFont(self.font)
-        self.start_button.setText("Декомпилировать")
+        self.start_button.setText('Декомпилировать')
         self.start_button.clicked.connect(self.start_processing)
         self.start_button.setStyleSheet(
-            "#start_button{"
-            "border-bottom: 3px solid #080386;"
-            "border-radius: 4px;"
-            "qproperty-alignment: AlignCenter;"
-            "background-color: #240DC4;"
-            "color: #ffffff;"
-            "}\n"
-            "#start_button:hover{"
-            "background-color: #080386;"
-            "}"
+            '#start_button{'
+            'border-bottom: 3px solid #080386;'
+            'border-radius: 4px;'
+            'qproperty-alignment: AlignCenter;'
+            'background-color: #240DC4;'
+            'color: #ffffff;'
+            '}\n'
+            '#start_button:hover{'
+            'background-color: #080386;'
+            '}'
         )
 
         self.stop_button = ClickedQLabel(self.form)
-        self.stop_button.setObjectName("stop_button")
+        self.stop_button.setObjectName('stop_button')
         self.stop_button.setGeometry(QtCore.QRect(490, 136, 140, 30))
         self.stop_button.setFont(self.font)
-        self.stop_button.setText("Остановить")
+        self.stop_button.setText('Остановить')
         self.stop_button.clicked.connect(lambda: self.stop_processing(401))
         self.stop_button.setStyleSheet(
-            "#stop_button{"
-            "border-bottom: 3px solid #9D0909;"
-            "border-radius: 4px;"
-            "qproperty-alignment: AlignCenter;"
-            "background-color: #ED0D0D;"
-            "color: #ffffff;"
-            "}\n"
-            "#stop_button:hover{"
-            "background-color: #9D0909;"
-            "}"
+            '#stop_button{'
+            'border-bottom: 3px solid #9D0909;'
+            'border-radius: 4px;'
+            'qproperty-alignment: AlignCenter;'
+            'background-color: #ED0D0D;'
+            'color: #ffffff;'
+            '}\n'
+            '#stop_button:hover{'
+            'background-color: #9D0909;'
+            '}'
         )
         self.stop_button.hide()
-
         self.form.show()
-
         QtCore.QMetaObject.connectSlotsByName(self.form)
 
-    def start_processing(self):
+    def start_processing(self) -> None:
         self.player.start_animation()
 
         self.start_button.hide()
@@ -486,32 +458,43 @@ class MainWindow(BaseForm):
         self.thread.callback.connect(self.stop_processing)
         self.thread.start()
 
-    def stop_processing(self, status_code):
+    def stop_processing(self, status_code) -> None:
         self.stop_button.hide()
         self.player.stop_animation()
         self.start_button.show()
 
         if status_code in range(200, 300):
-            message = utils.STATUS_CODES[status_code]
-            show_info("Успех", message)
+            message = STATUS_CODES[status_code]
+            show_info('Успех', message)
 
         elif status_code in range(400, 500):
-            message = utils.STATUS_CODES[status_code]
-            show_warning("Внимание", message)
+            message = STATUS_CODES[status_code]
+            show_warning('Внимание', message)
 
         elif status_code in range(500, 600):
-            message = utils.STATUS_CODES[status_code]
-            show_error("Критическая ошибка", message)
+            message = STATUS_CODES[status_code]
+            show_error('Критическая ошибка', message)
 
         else:
             show_error(
-                "Критическая ошибка", "Непредвиденный статус код: %s" % str(status_code)
+                'Критическая ошибка', 'Непредвиденный статус код: %s' % str(status_code)
             )
 
-    def select_file(self):
-        filename = file_dialog()
+    def select_file(self) -> None:
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.ExistingFile)
 
-        if filename is not None:
-            filename = filename[0].replace("/", "\\")
+        if not dlg.exec_():
+            return
 
-        self.lineEdit.setText(filename)
+        file = dlg.selectedFiles()
+
+        if not file:
+            return
+
+        file = file[0]
+
+        if system() == Platforms.WINDOWS:
+            file = file.replace('/', '\\')
+
+        self.lineEdit.setText(file)

@@ -1,20 +1,21 @@
-# -*- coding: UTF-8 -*-
 from PyQt5.QtWidgets import QCheckBox
 
-from PyQt5.QtCore import (
-    Qt,
-    QSize,
-    QPoint,
-    QPointF,
-    QRectF,
-    pyqtProperty,
-    QEasingCurve,
-    QPropertyAnimation,
-    QSequentialAnimationGroup,
-    pyqtSlot,
-)
+from PyQt5.QtCore import pyqtProperty
+from PyQt5.QtCore import pyqtSlot
+from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QEasingCurve
+from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QPointF
+from PyQt5.QtCore import QPropertyAnimation
+from PyQt5.QtCore import QRectF
+from PyQt5.QtCore import QSequentialAnimationGroup
 
-from PyQt5.QtGui import QColor, QBrush, QPaintEvent, QPen, QPainter
+from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QBrush
+from PyQt5.QtGui import QPainter
+from PyQt5.QtGui import QPaintEvent
+from PyQt5.QtGui import QPen
 
 
 class AnimatedToggle(QCheckBox):
@@ -25,11 +26,11 @@ class AnimatedToggle(QCheckBox):
         self,
         parent=None,
         bar_color=Qt.gray,
-        checked_color="#240DC4",
+        checked_color='#240DC4',
         handle_color=Qt.white,
-        pulse_unchecked_color="#D5D5D5",
-        pulse_checked_color="#4400B0EE",
-    ):
+        pulse_unchecked_color='#D5D5D5',
+        pulse_checked_color='#4400B0EE',
+    ) -> None:
         super().__init__(parent)
 
         self._bar_brush = QBrush(bar_color)
@@ -43,11 +44,11 @@ class AnimatedToggle(QCheckBox):
         self._handle_position = 0
         self._pulse_radius = 0
 
-        self.animation = QPropertyAnimation(self, b"handle_position", self)
+        self.animation = QPropertyAnimation(self, b'handle_position', self)
         self.animation.setEasingCurve(QEasingCurve.InOutCubic)
         self.animation.setDuration(250)
 
-        self.pulse_anim = QPropertyAnimation(self, b"pulse_radius", self)
+        self.pulse_anim = QPropertyAnimation(self, b'pulse_radius', self)
         self.pulse_anim.setDuration(250)
         self.pulse_anim.setStartValue(10)
         self.pulse_anim.setEndValue(17)
@@ -58,22 +59,23 @@ class AnimatedToggle(QCheckBox):
 
         self.stateChanged.connect(self.setup_animation)
 
-    def sizeHint(self):
+    def sizeHint(self) -> QSize:
         return QSize(58, 45)
 
-    def hitButton(self, pos: QPoint):
+    def hitButton(self, pos: QPoint) -> bool:
         return self.contentsRect().contains(pos)
 
     @pyqtSlot(int)
-    def setup_animation(self, value):
+    def setup_animation(self, value) -> None:
         self.animations_group.stop()
+        # HERE
         if value:
             self.animation.setEndValue(1)
         else:
             self.animation.setEndValue(0)
         self.animations_group.start()
 
-    def paintEvent(self, e: QPaintEvent):
+    def paintEvent(self, e: QPaintEvent) -> None:
         contRect = self.contentsRect()
         handleRadius = round(0.24 * contRect.height())
 
@@ -117,19 +119,19 @@ class AnimatedToggle(QCheckBox):
         p.end()
 
     @pyqtProperty(float)
-    def handle_position(self):
+    def handle_position(self) -> float:
         return self._handle_position
 
     @handle_position.setter
-    def handle_position(self, pos):
+    def handle_position(self, pos) -> None:
         self._handle_position = pos
         self.update()
 
     @pyqtProperty(float)
-    def pulse_radius(self):
+    def pulse_radius(self) -> float:
         return self._pulse_radius
 
     @pulse_radius.setter
-    def pulse_radius(self, pos):
+    def pulse_radius(self, pos) -> None:
         self._pulse_radius = pos
         self.update()

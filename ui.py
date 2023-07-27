@@ -46,7 +46,7 @@ class GifPlayer(QtCore.QObject):
                 124,
             )
         )
-        self.movie = QMovie(join('images', 'preloader.gif'))
+        self.movie = QMovie(join('src', 'preloader.gif'))
         self.movie.setCacheMode(QMovie.CacheAll)
         self.movie_screen.setMovie(self.movie)
         self.movie_screen.hide()
@@ -173,7 +173,7 @@ class Panel(QLabel, BaseMoveEvents):
         self._width = width
         self._height = height
         self.setGeometry(QtCore.QRect(0, 0, self._width, self._height))
-        self._pixmap = QtGui.QPixmap(join('images', 'header.png'))
+        self._pixmap = QtGui.QPixmap(join('src', 'header.png'))
         self.setScaledContents(True)
         self.setPixmap(self._pixmap)
         self.setObjectName('header')
@@ -216,7 +216,7 @@ class BaseButtonEvents(QWidget):
 class HideButton(ClickedQLabel, BaseButtonEvents):
     def __init__(self, parent: QWidget, x: int, y: int, size: int = 26) -> None:
         super(QLabel, self).__init__(parent)
-        self.pixmap = QtGui.QPixmap(join('images', 'hide.png'))
+        self.pixmap = QtGui.QPixmap(join('src', 'hide.png'))
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
         self.pixmap_enter = self.pixmap.copy(size, 0, size * 2, size)
 
@@ -229,7 +229,7 @@ class HideButton(ClickedQLabel, BaseButtonEvents):
 class CloseButton(ClickedQLabel, BaseButtonEvents):
     def __init__(self, parent: QWidget, x: int, y: int, size: int = 26) -> None:
         super(QLabel, self).__init__(parent)
-        self.pixmap = QtGui.QPixmap(join('images', 'close.png'))
+        self.pixmap = QtGui.QPixmap(join('src', 'close.png'))
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
         self.pixmap_enter = self.pixmap.copy(size, 0, size * 2, size)
 
@@ -267,7 +267,7 @@ class BaseForm(QtCore.QObject):
         self.form.setWindowFlags(Qt.FramelessWindowHint)
         icon = QtGui.QIcon()
         icon.addPixmap(
-            QtGui.QPixmap(join('images', 'icon.ico')), QtGui.QIcon.Normal, QtGui.QIcon.Off
+            QtGui.QPixmap(join('src', 'icon.ico')), QtGui.QIcon.Normal, QtGui.QIcon.Off
         )
         self.form.setWindowIcon(icon)
 

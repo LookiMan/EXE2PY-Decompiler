@@ -370,12 +370,12 @@ class MainWindow(BaseForm):
 
         self.is_need_decompile_sub_libraries_label = QLabel(self.form)
         self.is_need_decompile_sub_libraries_label.setObjectName('decompile_sub_libraries_label')
-        self.is_need_decompile_sub_libraries_label.setGeometry(QtCore.QRect(14, 106, 180, 24))
+        self.is_need_decompile_sub_libraries_label.setGeometry(QtCore.QRect(14, 106, 190, 24))
         self.is_need_decompile_sub_libraries_label.setText('Decompile all additional libraries')
         self.is_need_decompile_sub_libraries_label.setFont(self.font)
 
         self.is_need_decompile_sub_libraries_checkbox = AnimatedToggle(self.form)
-        self.is_need_decompile_sub_libraries_checkbox.move(200, 98)
+        self.is_need_decompile_sub_libraries_checkbox.move(210, 98)
         self.is_need_decompile_sub_libraries_checkbox.setFixedSize(
             self.is_need_decompile_sub_libraries_checkbox.sizeHint()
         )
@@ -383,12 +383,12 @@ class MainWindow(BaseForm):
 
         self.is_need_open_output_folder_label = QLabel(self.form)
         self.is_need_open_output_folder_label.setObjectName('open_output_folder_label')
-        self.is_need_open_output_folder_label.setGeometry(QtCore.QRect(14, 140, 180, 24))
-        self.is_need_open_output_folder_label.setText('Automatically open final folders')
+        self.is_need_open_output_folder_label.setGeometry(QtCore.QRect(14, 140, 190, 24))
+        self.is_need_open_output_folder_label.setText('Automatically open final folder')
         self.is_need_open_output_folder_label.setFont(self.font)
 
         self.is_need_open_output_folder_checkbox = AnimatedToggle(self.form)
-        self.is_need_open_output_folder_checkbox.move(200, 132)
+        self.is_need_open_output_folder_checkbox.move(210, 132)
         self.is_need_open_output_folder_checkbox.setChecked(True)
 
         self.player = GifPlayer(self.form)

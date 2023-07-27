@@ -264,6 +264,7 @@ class BaseForm(QtCore.QObject):
     def _customize_window(self) -> None:
         """Creating a custom windowокна"""
 
+        self.form.setWindowFlags(Qt.FramelessWindowHint)
         icon = QtGui.QIcon()
         icon.addPixmap(
             QtGui.QPixmap(join('images', 'icon.ico')), QtGui.QIcon.Normal, QtGui.QIcon.Off
@@ -442,8 +443,8 @@ class MainWindow(BaseForm):
         self.thread = Thread(
             self.worker,
             target=self.lineEdit.text().strip(),
-            is_need_decompile_sub_libraries=self.is_need_decompile_sub_libraries_checkbox.isChecked(), # NOQA
-            is_need_open_output_folder=self.is_need_open_output_folder_checkbox.isChecked(), # NOQA
+            is_need_decompile_sub_libraries=self.is_need_decompile_sub_libraries_checkbox.isChecked(),
+            is_need_open_output_folder=self.is_need_open_output_folder_checkbox.isChecked(),
         )
 
         self.thread.callback.connect(self.stop_processing)

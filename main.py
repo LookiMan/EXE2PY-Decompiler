@@ -6,6 +6,7 @@ from os import listdir
 from os import rename
 from os import path
 from platform import system
+from typing import Literal
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWidgets import QMessageBox
@@ -14,8 +15,8 @@ from config import EXTRACTED_DIR
 from config import EXTRACTING_LOG
 from config import LOG_FILE
 from config import LOG_LEVEL
-from config import MODULES_DIR
 from config import MAIN_DIR
+from config import MODULES_DIR
 from config import PYCACHE_DIR
 
 from ui import MainWindow
@@ -26,6 +27,7 @@ from utils import search_pyc_files
 from utils import START_BYTE
 from utils import PYTHON_HEADERS
 from utils import Platforms
+from utils import StatusCodes
 
 import logging
 
@@ -124,7 +126,15 @@ class HeaderCorrectorSubLibraries(HeaderCorrectorMainFiles):
             file.write(self.filedata.read())
 
 
-def decompile_pyc_file(filename: str, output_directory: str) -> int:
+def decompile_pyc_file(
+    filename: str,
+    *,
+    output_directory: str
+) -> Literal[
+    StatusCodes.PYC_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.PYC_DECOMPILATION_ERROR,
+]:
+    is_decompiled_successfully = False
     corrector = HeaderCorrectorMainFiles()
     corrector.set_file(filename)
 
@@ -138,8 +148,7 @@ def decompile_pyc_file(filename: str, output_directory: str) -> int:
             corrector.correct_file(header)
             try:
                 uncompile.main_bin()
-            except Exception as e:
-                log.exception(e)
+            except Exception:
                 continue
             else:
                 if stream_buffer.is_has('# Successfully decompiled file'):
@@ -147,19 +156,47 @@ def decompile_pyc_file(filename: str, output_directory: str) -> int:
     else:
         uncompile.main_bin()
 
+    if stream_buffer.is_has('# Successfully decompiled file'):
+        is_decompiled_successfully = True
+
     stream_buffer.release_stream()
     stream_buffer.dump_logs(path.join(output_directory, EXTRACTING_LOG))
 
-    return 201
+    return StatusCodes.PYC_DECOMPILED_SUCCESSFULLY if is_decompiled_successfully else StatusCodes.PYC_DECOMPILATION_ERROR
 
 
-def decompile_pyc_files(filenames: list, *, output_directory: str):
+def decompile_pyc_files(
+    filenames: list,
+    *,
+    output_directory: str
+) -> Literal[
+    StatusCodes.PYC_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.PYC_PARTIALLY_DECOMPILATION,
+]:
+    is_decompiled_successfully = True
+
     for filename in filenames:
-        decompile_pyc_file(filename, output_directory)
-    return 203
+        status = decompile_pyc_file(
+            filename,
+            output_directory=output_directory,
+        )
+
+        if is_decompiled_successfully and status != StatusCodes.PYC_DECOMPILED_SUCCESSFULLY:
+            is_decompiled_successfully = False
+
+    return StatusCodes.PYC_DECOMPILED_SUCCESSFULLY if is_decompiled_successfully else StatusCodes.PYC_PARTIALLY_DECOMPILATION
 
 
-def decompile_sublibrary(filename: str, *, output_directory: str):
+def decompile_sub_library(
+    filename: str,
+    *,
+    output_directory: str
+) -> Literal[
+    StatusCodes.LIB_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.LIB_DECOMPILATION_ERROR,
+]:
+    is_decompiled_successfully = False
+
     corrector = HeaderCorrectorSubLibraries()
     corrector.set_file(filename)
 
@@ -168,28 +205,57 @@ def decompile_sublibrary(filename: str, *, output_directory: str):
     stream_buffer = StreamBuffer()
     stream_buffer.intercept_stream(sys.stdout)
 
-    try:
-        uncompile.main_bin()
-    except Exception:
-        # For python version 3.6, the file header is 4 bytes shorter,
-        # so we first try to decompile the bytecode without changes,
-        # if an error occurs, 4 bytes are added to the file header
-        # to allow normal decompilation of cache files for versions 3.7, 3.8.
-        corrector.correct_file()
-        uncompile.main_bin()
+    for attempt in range(1, 3):
+        if attempt == 2:
+            # For python version 3.6, the file header is 4 bytes shorter,
+            # so we first try to decompile the bytecode without changes,
+            # if an error occurs, 4 bytes are added to the file header
+            # to allow normal decompilation of cache files for versions 3.7 3.8
+            corrector.correct_file()
+        try:
+            uncompile.main_bin()
+            is_decompiled_successfully = True
+        except Exception:
+            continue
 
     stream_buffer.release_stream()
     stream_buffer.dump_logs(path.join(output_directory, EXTRACTING_LOG))
-    return 202
+
+    return StatusCodes.LIB_DECOMPILED_SUCCESSFULLY if is_decompiled_successfully else StatusCodes.LIB_DECOMPILATION_ERROR
 
 
-def decompile_sublibraries(filenames: list, *, output_directory: str):
+def decompile_sub_libraries(
+    filenames: list,
+    *,
+    output_directory: str
+) -> Literal[
+    StatusCodes.LIB_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.LIB_PARTIALLY_DECOMPILATION,
+]:
+    is_decompiled_successfully = True
+
     for filename in filenames:
-        decompile_sublibrary(filename, output_directory=output_directory)
-    return 204
+        status = decompile_sub_library(
+            filename,
+            output_directory=output_directory
+        )
+
+        if is_decompiled_successfully and status != StatusCodes.PYC_DECOMPILED_SUCCESSFULLY:
+            is_decompiled_successfully = False
+
+    return StatusCodes.LIB_DECOMPILED_SUCCESSFULLY if is_decompiled_successfully else StatusCodes.LIB_PARTIALLY_DECOMPILATION
 
 
-def decompile_with_pyinstxtractor(filename: str, *, is_need_decompile_sub_libraries: bool):
+def decompile_with_pyinstxtractor(
+    filename: str,
+    *,
+    is_need_decompile_sub_libraries: bool
+) -> Literal[
+    StatusCodes.PYC_DECOMPILATION_ERROR,
+    StatusCodes.LIB_DECOMPILATION_ERROR,
+    StatusCodes.EXE_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.EXE_PARTIALLY_DECOMPILATION,
+]:
     current_directory = path.dirname(filename)
     extract_directory = path.join(current_directory, EXTRACTED_DIR)
     modules_directory = path.join(current_directory, MODULES_DIR)
@@ -220,7 +286,8 @@ def decompile_with_pyinstxtractor(filename: str, *, is_need_decompile_sub_librar
     # Getting a list of possible main files
     files = pyinstxtractor.MAIN_FILES
 
-    # These libraries are always on the list of core libraries, but are not related to them
+    # These libraries are always on the list of core libraries,
+    # but are not related to them
     if 'pyi_rth_multiprocessing' in files:
         files.remove('pyi_rth_multiprocessing')
     if 'pyiboot01_bootstrap' in files:
@@ -232,44 +299,62 @@ def decompile_with_pyinstxtractor(filename: str, *, is_need_decompile_sub_librar
     if 'pyi_rth_pyqt5' in files:
         files.remove('pyi_rth_pyqt5')
 
-    main_files = [path.join(extract_directory, filename) for filename in files]
+    files = [path.join(extract_directory, filename) for filename in files]
 
-    for filename in main_files:
+    for filename in files:
         rename(filename, filename + '.pyc')
 
-    main_files = [filename + '.pyc' for filename in main_files]
+    files = [filename + '.pyc' for filename in files]
 
     stream_buffer.release_stream()
     stream_buffer.dump_logs(path.join(scripts_directory, EXTRACTING_LOG))
 
+    pyc_status = None
+    lib_status = None
+
     try:
-        decompile_pyc_files(main_files, output_directory=scripts_directory)
+        pyc_status = decompile_pyc_files(
+            files,
+            output_directory=scripts_directory
+        )
     except Exception as e:
         log.exception(e)
-        return 501
+        return StatusCodes.PYC_DECOMPILATION_ERROR
 
     if is_need_decompile_sub_libraries:
-        cache_files = [
-            path.join(cache_directory, file) for file in listdir(cache_directory)
-        ]
+        cache_files = list(
+            map(
+                lambda file: path.join(cache_directory, file),
+                listdir(cache_directory)
+            )
+        )
 
         try:
-            decompile_sublibraries(
+            lib_status = decompile_sub_libraries(
                 cache_files,
                 output_directory=modules_directory
             )
         except Exception as e:
             log.exception(e)
-            return 501
-    return 200
+            return StatusCodes.LIB_DECOMPILATION_ERROR
+
+    if pyc_status == StatusCodes.PYC_DECOMPILED_SUCCESSFULLY and lib_status == StatusCodes.LIB_DECOMPILED_SUCCESSFULLY:
+        status = StatusCodes.EXE_DECOMPILED_SUCCESSFULLY
+    else:
+        status = StatusCodes.EXE_PARTIALLY_DECOMPILATION
+
+    return status
 
 
-def decompile_with_unpy2exe(filename: str) -> int:
+def decompile_with_unpy2exe(filename: str) -> Literal[
+    StatusCodes.EXE_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.EXE_PARTIALLY_DECOMPILATION,
+]:
     current_directory = path.dirname(filename)
     extract_directory = path.join(current_directory, EXTRACTED_DIR)
     scripts_directory = path.join(current_directory, MAIN_DIR)
 
-    if system() == Platforms.WINDOWS:
+    if system() == Platforms.WINDOWS.value:
         # The name contains forbidden symbols symbols for windows '<', '>'
         unpy2exe.IGNORE.append('<boot hacks>.pyc')
 
@@ -278,13 +363,30 @@ def decompile_with_unpy2exe(filename: str) -> int:
     unpy2exe._generate_pyc_header = lambda python_version, size: b''
     unpy2exe.unpy2exe(filename, f'{sys.version_info[:2]}.{extract_directory}')
 
-    return decompile_pyc_files(
-        search_pyc_files(extract_directory), 
+    status = decompile_pyc_files(
+        search_pyc_files(extract_directory),
         output_directory=scripts_directory,
     )
 
+    if status == StatusCodes.PYC_DECOMPILED_SUCCESSFULLY:
+        status_code = StatusCodes.EXE_DECOMPILED_SUCCESSFULLY
+    else:
+        status_code = StatusCodes.EXE_PARTIALLY_DECOMPILATION
 
-def decompile_executable(filename: str, *, is_need_decompile_sub_libraries: bool) -> int:
+    return status_code
+
+
+def decompile_executable(
+    filename: str,
+    *,
+    is_need_decompile_sub_libraries: bool
+) -> Literal[
+    StatusCodes.EXE_DECOMPILED_SUCCESSFULLY,
+    StatusCodes.EXE_PARTIALLY_DECOMPILATION,
+    StatusCodes.PYC_DECOMPILATION_ERROR,
+    StatusCodes.LIB_DECOMPILATION_ERROR,
+    StatusCodes.EXE_DECOMPILATION_ERROR,
+]:
     try:
         return decompile_with_pyinstxtractor(
             filename,
@@ -292,83 +394,66 @@ def decompile_executable(filename: str, *, is_need_decompile_sub_libraries: bool
         )
     except (ValueError, TypeError, ImportError, FileNotFoundError, PermissionError) as e:
         log.exception(e)
-        return 500
+        return StatusCodes.EXE_DECOMPILATION_ERROR
     except Exception:
         # Raise this exception if the program is not compiled with pyinstaller
         return decompile_with_unpy2exe(filename)
 
 
 def start_decompile(
-    filename: str,
+    target: str,
     *,
     is_need_decompile_sub_libraries: bool,
     is_need_open_output_folder: bool,
 ) -> int:
 
-    status_code = -1
+    status = StatusCodes.UNEXPECTED_CONFIGURATION
 
-    if not path.exists(filename):
-        return 400
+    if not path.exists(target):
+        status = StatusCodes.TARGET_NOT_EXISTS
 
-    if filename.endswith('.pyc'):
-        output_directory = path.dirname(filename)
+    elif target.endswith('.pyc'):
+        output_directory = path.dirname(target)
 
-        if is_need_decompile_sub_libraries:
-            status_code = decompile_sublibrary(
-                filename,
-                output_directory=output_directory,
-            )
-
-        else:
-            status_code = decompile_pyc_file(
-                filename,
-                output_directory=output_directory,
-            )
+        status = decompile_pyc_file(
+            target,
+            output_directory=output_directory,
+        )
 
         if is_need_open_output_folder:
             open_output_folder(output_directory)
 
-    elif filename.endswith('.exe'):
-        status_code = decompile_executable(
-            filename,
+    elif target.endswith('.exe'):
+        status = decompile_executable(
+            target,
             is_need_decompile_sub_libraries=is_need_decompile_sub_libraries
         )
 
         if is_need_open_output_folder:
             open_output_folder(
-                path.join(path.dirname(filename), MAIN_DIR)
+                path.join(path.dirname(target), MAIN_DIR)
             )
 
-    elif path.isdir(filename):
-        filenames = search_pyc_files(filename)
-        output_directory = filename
+    elif path.isdir(target):
+        filenames = search_pyc_files(target)
+        output_directory = target
 
-        if is_need_decompile_sub_libraries:
-            status_code = decompile_sublibraries(
-                filenames,
-                output_directory=output_directory
-            )
-        else:
-            status_code = decompile_pyc_files(
+        if filenames:
+            status = decompile_pyc_files(
                 filenames,
                 output_directory=output_directory,
             )
 
-        if is_need_open_output_folder:
-            open_output_folder(output_directory)
+            if is_need_open_output_folder:
+                open_output_folder(output_directory)
+        else:
+            status = StatusCodes.FILES_NOT_FOUND
 
-    elif not filename.endswith('.exe') and not filename.endswith('.pyc'):
-        status_code = 400
-
-    else:
-        status_code = 402
-
-    return status_code
+    return status.value
 
 
 def main() -> None:
     app = QApplication(sys.argv)
-
     widget = MainWindow(start_decompile)
 
     if import_errors:

@@ -17,39 +17,61 @@ PYTHON_HEADERS = [
 
 START_BYTE = b'\xe3'
 
-# Return codes of some functions
-STATUS_CODES = {
-    200: 'Декомпиляция исполняемого файла успешно завершена',
-    201: 'Декомпиляция кэш-файла успешно завершена',
-    202: 'Декомпиляция дополнительной библиотеки успешно завершена',
-    203: 'Декомпиляция кэш-файлов успешно завершена',
-    204: 'Декомпиляция дополнительных библиотек успешно завершена',
-    400: 'Передан файл с неожиданым расширением',
-    401: 'Процесс остановлен пользователем',
-    402: 'Получено непредвиденное сочетание параметров для декомпиляции',
-    403: 'В функцию decompile_pyc_files передан неожиданый тип данныйх',
-    404: 'В функцию decompile_sublibraries передан неожиданый тип данныйх',
-    405: 'В папке не обнаружено нужных файлов',
-    500: 'Возникла непредвиденная ошибка при декомпиляции исполняемого файла',
-    501: 'Возникла непредвиденная ошибка при декомпиляции кэш-файла',
-    502: 'Невозможно исправить заголовок дополнительной библиотеки',
-    503: 'Возникла непредвиденная ошибка при декомпиляции дополнительной библиотеки',
-}
-
 
 class Platforms(Enum):
     WINDOWS = 'Windows'
 
 
+class StatusCodes(Enum):
+    # Success codes
+    EXE_DECOMPILED_SUCCESSFULLY = 200
+    EXE_PARTIALLY_DECOMPILATION = 201
+    PYC_DECOMPILED_SUCCESSFULLY = 202
+    PYC_PARTIALLY_DECOMPILATION = 203
+    LIB_DECOMPILED_SUCCESSFULLY = 204
+    LIB_PARTIALLY_DECOMPILATION = 205
+    # User error codes
+    USER_STOPED = 400
+    UNEXPECTED_CONFIGURATION = 401
+    UNEXPECTED_EXTENSION = 402
+    TARGET_NOT_EXISTS = 403
+    FILES_NOT_FOUND = 404
+    # Unknown error codes
+    EXE_DECOMPILATION_ERROR = 500
+    PYC_DECOMPILATION_ERROR = 501
+    LIB_DECOMPILATION_ERROR = 502
+
+
+# Return codes of some functions
+STATUS_CODES = {
+    # Success messages
+    StatusCodes.EXE_DECOMPILED_SUCCESSFULLY.value: 'Decompilation of the executable has been successfully completed',
+    StatusCodes.EXE_PARTIALLY_DECOMPILATION.value: 'Decompilation of the executable file partially successful',
+    StatusCodes.PYC_DECOMPILED_SUCCESSFULLY.value: 'Decompilation of the cache files has been successfully completed',
+    StatusCodes.PYC_PARTIALLY_DECOMPILATION.value: 'Decompilation of cache files partially successful',
+    StatusCodes.LIB_DECOMPILED_SUCCESSFULLY.value: 'Decompilation of the additional libraries has been successfully completed',
+    StatusCodes.LIB_PARTIALLY_DECOMPILATION.value: 'Decompilation of the additional libraries partially successful',
+    # User error messages
+    StatusCodes.USER_STOPED.value: 'Process stopped by user',
+    StatusCodes.UNEXPECTED_CONFIGURATION.value: 'Received unexpected combination of parameters for decompilation',
+    StatusCodes.UNEXPECTED_EXTENSION.value: 'A file with an unexpected extension was transferred',
+    StatusCodes.TARGET_NOT_EXISTS.value: 'A selected file or directory not exists',
+    StatusCodes.FILES_NOT_FOUND.value: 'No files found in the folder',
+    # Unknown error messages
+    StatusCodes.EXE_DECOMPILATION_ERROR.value: 'An unexpected error occurred while decompiling the executable file',
+    StatusCodes.PYC_DECOMPILATION_ERROR.value: 'An unexpected error occurred while decompiling the cache file',
+    StatusCodes.LIB_DECOMPILATION_ERROR.value: 'An unexpected error occurred while decompiling an additional library',
+}
+
+
 def search_pyc_files(directory: str) -> list:
-    return glob.glob('%s\\*.pyc' % directory)
+    return glob.glob(f'{directory}\\*.pyc')
 
 
 def make_folders(folders: list) -> None:
     for folder in folders:
         if os.path.exists(folder):
             remove_folder(folder)
-
         create_folder(folder)
 
 

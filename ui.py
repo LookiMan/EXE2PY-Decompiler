@@ -262,14 +262,11 @@ class BaseForm(QtCore.QObject):
     closeHandler = QtCore.pyqtSignal(dict)
 
     def _customize_window(self) -> None:
-        '''Создание кастомного окна'''
+        """Creating a custom windowокна"""
 
-        # Убираем стандартную рамку
-        self.form.setWindowFlags(Qt.FramelessWindowHint)
-        # Установка иконки
         icon = QtGui.QIcon()
         icon.addPixmap(
-            QtGui.QPixmap('images/icon.ico'), QtGui.QIcon.Normal, QtGui.QIcon.Off
+            QtGui.QPixmap(join('images', 'icon.ico')), QtGui.QIcon.Normal, QtGui.QIcon.Off
         )
         self.form.setWindowIcon(icon)
 
@@ -290,10 +287,6 @@ class BaseForm(QtCore.QObject):
         self.form.showMinimized()
 
     def close(self) -> None:
-        # Если есть дочернее окно, закроет его
-        if hasattr(self, 'child_form'):
-            self.child_form.close()
-
         self.form.close()
 
     def set_title(self, title: str) -> None:
@@ -374,26 +367,28 @@ class MainWindow(BaseForm):
             '}'
         )
 
-        self.label_2 = QLabel(self.form)
-        self.label_2.setObjectName('label_2')
-        self.label_2.setGeometry(QtCore.QRect(14, 106, 320, 24))
-        self.label_2.setText('Декомпилировать все дополнительные библиотеки')
-        self.label_2.setFont(self.font)
+        self.is_need_decompile_sub_libraries_label = QLabel(self.form)
+        self.is_need_decompile_sub_libraries_label.setObjectName('decompile_sub_libraries_label')
+        self.is_need_decompile_sub_libraries_label.setGeometry(QtCore.QRect(14, 106, 320, 24))
+        self.is_need_decompile_sub_libraries_label.setText('Декомпилировать все дополнительные библиотеки')
+        self.is_need_decompile_sub_libraries_label.setFont(self.font)
 
-        self.checkbox = AnimatedToggle(self.form)
-        self.checkbox.move(340, 98)
-        self.checkbox.setFixedSize(self.checkbox.sizeHint())
-        self.checkbox.show()
+        self.is_need_decompile_sub_libraries_checkbox = AnimatedToggle(self.form)
+        self.is_need_decompile_sub_libraries_checkbox.move(340, 98)
+        self.is_need_decompile_sub_libraries_checkbox.setFixedSize(
+            self.is_need_decompile_sub_libraries_checkbox.sizeHint()
+        )
+        self.is_need_decompile_sub_libraries_checkbox.show()
 
-        self.label_3 = QLabel(self.form)
-        self.label_3.setObjectName('label_2')
-        self.label_3.setGeometry(QtCore.QRect(14, 140, 320, 24))
-        self.label_3.setText('Автоматически открыть финальные папки')
-        self.label_3.setFont(self.font)
+        self.is_need_open_output_folder_label = QLabel(self.form)
+        self.is_need_open_output_folder_label.setObjectName('open_output_folder_label')
+        self.is_need_open_output_folder_label.setGeometry(QtCore.QRect(14, 140, 320, 24))
+        self.is_need_open_output_folder_label.setText('Автоматически открыть финальные папки')
+        self.is_need_open_output_folder_label.setFont(self.font)
 
-        self.checkbox_2 = AnimatedToggle(self.form)
-        self.checkbox_2.move(340, 132)
-        self.checkbox_2.setChecked(True)
+        self.is_need_open_output_folder_checkbox = AnimatedToggle(self.form)
+        self.is_need_open_output_folder_checkbox.move(340, 132)
+        self.is_need_open_output_folder_checkbox.setChecked(True)
 
         self.player = GifPlayer(self.form)
 
@@ -446,9 +441,9 @@ class MainWindow(BaseForm):
 
         self.thread = Thread(
             self.worker,
-            filename=self.lineEdit.text().strip(),
-            is_need_decompile_sub_libraries=self.checkbox.isChecked(),
-            is_need_open_output_folder=self.checkbox_2.isChecked(),
+            target=self.lineEdit.text().strip(),
+            is_need_decompile_sub_libraries=self.is_need_decompile_sub_libraries_checkbox.isChecked(), # NOQA
+            is_need_open_output_folder=self.is_need_open_output_folder_checkbox.isChecked(), # NOQA
         )
 
         self.thread.callback.connect(self.stop_processing)
@@ -459,22 +454,22 @@ class MainWindow(BaseForm):
         self.player.stop_animation()
         self.start_button.show()
 
-        if status_code in range(200, 300):
+        if not STATUS_CODES.get(status_code):
+            self.show_error(
+                'Critical', f'Unknown status code: {status_code}'
+            )
+
+        elif status_code in range(200, 300):
             message = STATUS_CODES[status_code]
-            self.show_info('Успех', message)
+            self.show_info('Success', message)
 
         elif status_code in range(400, 500):
             message = STATUS_CODES[status_code]
-            self.show_warning('Внимание', message)
+            self.show_warning('Warning', message)
 
         elif status_code in range(500, 600):
             message = STATUS_CODES[status_code]
-            self.show_error('Критическая ошибка', message)
-
-        else:
-            self.show_error(
-                'Критическая ошибка', 'Непредвиденный статус код: %s' % str(status_code)
-            )
+            self.show_error('Critical', message)
 
     def select_file(self) -> None:
         dlg = QFileDialog()
@@ -490,7 +485,7 @@ class MainWindow(BaseForm):
 
         file = file[0]
 
-        if system() == Platforms.WINDOWS:
+        if system() == Platforms.WINDOWS.value:
             file = file.replace('/', '\\')
 
         self.lineEdit.setText(file)

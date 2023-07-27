@@ -3,3 +3,4 @@ pyautogui==0.9.54
 uncompyle6==3.9.0
 unpy2exe==0.4
 pyright==1.1.318
+flake8==6.0.0

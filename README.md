@@ -62,6 +62,10 @@ At the same time, the difference in versions does not matter. (With python versi
 
 `python main.py`
 
-# Validate:
+# Validate-flake8:
+
+`flake8 filename.py`
+
+# Validate-pyright:
 
 `pyright filename.py`

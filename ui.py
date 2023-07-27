@@ -216,27 +216,27 @@ class BaseButtonEvents(QWidget):
 class HideButton(ClickedQLabel, BaseButtonEvents):
     def __init__(self, parent: QWidget, x: int, y: int, size: int = 26) -> None:
         super(QLabel, self).__init__(parent)
-        self.pixmap = QtGui.QPixmap('images/hide.png')
+        self.pixmap = QtGui.QPixmap(join('images', 'hide.png'))
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
         self.pixmap_enter = self.pixmap.copy(size, 0, size * 2, size)
 
         self.setGeometry(QtCore.QRect(x, y, size, size))
         self.setPixmap(self.pixmap_leave)
         self.setObjectName('minimize_button')
-        self.setToolTip('Свернуть')
+        self.setToolTip('Hide')
 
 
 class CloseButton(ClickedQLabel, BaseButtonEvents):
     def __init__(self, parent: QWidget, x: int, y: int, size: int = 26) -> None:
         super(QLabel, self).__init__(parent)
-        self.pixmap = QtGui.QPixmap('images/close.png')
+        self.pixmap = QtGui.QPixmap(join('images', 'close.png'))
         self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
         self.pixmap_enter = self.pixmap.copy(size, 0, size * 2, size)
 
         self.setGeometry(QtCore.QRect(x, y, size, size))
         self.setPixmap(self.pixmap_leave)
         self.setObjectName('close_button')
-        self.setToolTip('Закрыть')
+        self.setToolTip('Close')
 
 
 class Header:
@@ -262,7 +262,7 @@ class BaseForm(QtCore.QObject):
     closeHandler = QtCore.pyqtSignal(dict)
 
     def _customize_window(self) -> None:
-        """Creating a custom windowокна"""
+        """Creating a custom window"""
 
         self.form.setWindowFlags(Qt.FramelessWindowHint)
         icon = QtGui.QIcon()
@@ -330,7 +330,7 @@ class MainWindow(BaseForm):
         self.label = QLabel(self.form)
         self.label.setObjectName('label')
         self.label.setGeometry(QtCore.QRect(12, 36, 601, 16))
-        self.label.setText('Введите путь к декомпилируемой программе или скрипту')
+        self.label.setText('Enter the path to the program or script to be decompiled')
         self.label.setFont(self.font)
 
         self.lineEdit = DraggableLineEdit(self.form)
@@ -370,12 +370,12 @@ class MainWindow(BaseForm):
 
         self.is_need_decompile_sub_libraries_label = QLabel(self.form)
         self.is_need_decompile_sub_libraries_label.setObjectName('decompile_sub_libraries_label')
-        self.is_need_decompile_sub_libraries_label.setGeometry(QtCore.QRect(14, 106, 320, 24))
-        self.is_need_decompile_sub_libraries_label.setText('Декомпилировать все дополнительные библиотеки')
+        self.is_need_decompile_sub_libraries_label.setGeometry(QtCore.QRect(14, 106, 180, 24))
+        self.is_need_decompile_sub_libraries_label.setText('Decompile all additional libraries')
         self.is_need_decompile_sub_libraries_label.setFont(self.font)
 
         self.is_need_decompile_sub_libraries_checkbox = AnimatedToggle(self.form)
-        self.is_need_decompile_sub_libraries_checkbox.move(340, 98)
+        self.is_need_decompile_sub_libraries_checkbox.move(200, 98)
         self.is_need_decompile_sub_libraries_checkbox.setFixedSize(
             self.is_need_decompile_sub_libraries_checkbox.sizeHint()
         )
@@ -383,12 +383,12 @@ class MainWindow(BaseForm):
 
         self.is_need_open_output_folder_label = QLabel(self.form)
         self.is_need_open_output_folder_label.setObjectName('open_output_folder_label')
-        self.is_need_open_output_folder_label.setGeometry(QtCore.QRect(14, 140, 320, 24))
-        self.is_need_open_output_folder_label.setText('Автоматически открыть финальные папки')
+        self.is_need_open_output_folder_label.setGeometry(QtCore.QRect(14, 140, 180, 24))
+        self.is_need_open_output_folder_label.setText('Automatically open final folders')
         self.is_need_open_output_folder_label.setFont(self.font)
 
         self.is_need_open_output_folder_checkbox = AnimatedToggle(self.form)
-        self.is_need_open_output_folder_checkbox.move(340, 132)
+        self.is_need_open_output_folder_checkbox.move(200, 132)
         self.is_need_open_output_folder_checkbox.setChecked(True)
 
         self.player = GifPlayer(self.form)
@@ -397,7 +397,7 @@ class MainWindow(BaseForm):
         self.start_button.setObjectName('start_button')
         self.start_button.setGeometry(QtCore.QRect(490, 136, 140, 30))
         self.start_button.setFont(self.font)
-        self.start_button.setText('Декомпилировать')
+        self.start_button.setText('Decompile')
         self.start_button.clicked.connect(self.start_processing)
         self.start_button.setStyleSheet(
             '#start_button{'
@@ -416,7 +416,7 @@ class MainWindow(BaseForm):
         self.stop_button.setObjectName('stop_button')
         self.stop_button.setGeometry(QtCore.QRect(490, 136, 140, 30))
         self.stop_button.setFont(self.font)
-        self.stop_button.setText('Остановить')
+        self.stop_button.setText('Stop')
         self.stop_button.clicked.connect(lambda: self.stop_processing(401))
         self.stop_button.setStyleSheet(
             '#stop_button{'
@@ -490,3 +490,8 @@ class MainWindow(BaseForm):
             file = file.replace('/', '\\')
 
         self.lineEdit.setText(file)
+
+        state = True if file.endswith('.exe') else False
+
+        self.is_need_decompile_sub_libraries_checkbox.setChecked(state)
+        self.is_need_decompile_sub_libraries_checkbox.setDisabled(not state)

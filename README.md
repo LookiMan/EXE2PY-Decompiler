@@ -8,10 +8,22 @@ It is also possible to decompile individual cache files back into the original p
 
 *Screenshot of the main application window*
 
-![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/main_window.PNG)
+![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/example/main_window.PNG)
 
 
 **What's new:**
+
+=== Jul 27, 2023 ===
+
+- Full refactoring was performed
+
+- Updated README.md
+
+- Updated requirements.txt
+
+- Add logical disabling of the checkbox 'Decompile all additional libraries' if not .exe file is selected
+
+=== Jun 11, 2021 ===
 
 - Completely redesigned graphical interface
 
@@ -35,11 +47,10 @@ It is also possible to decompile individual cache files back into the original p
 
 - If you cannot decompile one of the libraries from the **EXE2PY_Pycache** folder, check the "decompile all additional libraries" checkbox and try again.
 
-- The program can work on python versions 3.4, 3.6, 3.7. 3.8
+- The program can work on python versions 3.7 and older
 
-
-- With its help, it is possible to decompile programs of the above mentioned python versions. 
-At the same time, the difference in versions does not matter. (With python version 3.4., you can decompile a program written in python 3.6.).
+- With its help, it is possible to decompile programs - 3.4, 3.6, 3.7. 3.8 python versions. 
+At the same time, the difference in versions does not matter. (With python version 3.8, you can decompile a program written in python 3.4, 3.6, etc).
 
 
 <hr>
@@ -47,7 +58,7 @@ At the same time, the difference in versions does not matter. (With python versi
 *Screenshot of the running application*
 
 
-![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/Examples/working.PNG)
+![](https://github.com/topdefaultuser/EXE2PY-Decompiler/blob/master/example/decompiling_process.PNG)
 
 
 # Upgrade pip:
